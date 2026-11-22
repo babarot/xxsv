@@ -26,6 +26,20 @@ The name, xxsv (ex-ex-es-vee), comes from [xsv](https://github.com/BurntSushi/xs
 
 ## Install
 
+With [Homebrew](https://brew.sh/):
+
+```sh
+brew install babarot/tap/xxsv
+```
+
+With [Nix](https://nixos.org/):
+
+```sh
+nix profile install github:babarot/nur-packages#xxsv
+```
+
+With Go:
+
 ```sh
 go install github.com/babarot/xxsv/cmd/xxsv@latest
 ```

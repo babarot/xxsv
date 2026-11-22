@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yaml
+    permissions:
+      contents: read
+
+  # Nothing is released, nor the pull request of the next release made,
+  # from a main that fails the tests
+  tagpr:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      # A merge that landed while the tests ran, a release pull request among
+      # them, is not in this commit. tagpr on it would open the release pull
+      # request again for a version already released. The run for the newer
+      # main, which waits for this one, runs tagpr after its own tests pass
+      - name: Check that main has not moved on
+        id: head
+        run: |
+          main=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$main" = "$GITHUB_SHA" ]; then
+            echo "latest=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "::notice::main is at $main, not $GITHUB_SHA; leaving tagpr to the newer run"
+          fi
+      - name: Run tagpr
+        if: steps.head.outputs.latest == 'true'
+        uses: Songmu/tagpr@555e72cee68c09d43dc2337dc9ba890955b630da # v1.19.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        id: run-tagpr
+    outputs:
+      tag: ${{ steps.run-tagpr.outputs.tag }}
+
+  goreleaser:
+    if: needs.tagpr.outputs.tag != ''
+    needs: tagpr
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: Install Nix
+        # GoReleaser needs nix-hash to publish to babarot/nur-packages
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
+        with:
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          NUR_GITHUB_TOKEN: ${{ secrets.NUR_GITHUB_TOKEN }}

@@ -1,0 +1,71 @@
+version: 2
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version=v{{.Version}}
+    main: ./cmd/xxsv
+    flags:
+      - -trimpath
+
+archives:
+  - formats: ["tar.gz"]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
+    # The default files, and the license of the Lucide icons the UI embeds
+    files:
+      - LICENSE*
+      - README*
+      - CHANGELOG*
+      - src: internal/server/ui/dist/licenses/lucide.txt
+        dst: licenses
+        strip_parent: true
+
+# tagpr writes the release notes
+changelog:
+  disable: true
+
+release:
+  prerelease: auto
+  draft: false
+  footer: >-
+    ### Installation
+
+    - [Homebrew](https://brew.sh/): `brew install babarot/tap/xxsv`
+
+    - [Nix](https://nixos.org/): `nix profile install github:babarot/nur-packages#xxsv`
+
+    - Go: `go install github.com/babarot/xxsv/cmd/xxsv@latest`
+
+brews:
+  - repository:
+      owner: babarot
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/babarot/xxsv
+    description: Show a CSV, TSV or JSONL file as a table in the browser, kept up to date as you edit it
+    license: MIT
+
+nix:
+  - repository:
+      owner: babarot
+      name: nur-packages
+      token: "{{ .Env.NUR_GITHUB_TOKEN }}"
+    homepage: https://github.com/babarot/xxsv
+    description: Show a CSV, TSV or JSONL file as a table in the browser, kept up to date as you edit it
+    license: mit
+    main_program: xxsv

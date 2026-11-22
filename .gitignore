@@ -2,3 +2,5 @@
 /xxsv
 coverage.out
 .DS_Store
+# goreleaser release --snapshot
+/dist
