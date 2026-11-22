@@ -76,7 +76,7 @@ test("viewSentence describes the view", () => {
 test("estimateWidth stays between 90 and 340 pixels", () => {
   assert.equal(estimateWidth({ name: "", type: "boolean" }), 90);
   assert.equal(estimateWidth({ name: "x".repeat(100), type: "string" }), 340);
-  const w = estimateWidth({ name: "id", type: "integer" }, { ...stats("integer"), max: 123456789 });
+  const w = estimateWidth({ name: "id", type: "integer" }, ["123456789"]);
   assert.ok(w > 90 && w < 340);
 });
 
