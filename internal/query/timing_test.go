@@ -52,6 +52,19 @@ func TestQueryTiming(t *testing.T) {
 	}})
 	run("search + sort name", Query{Search: "alpha", Sorts: []Sort{{Column: "name"}}})
 	run("page from cache (offset 500000)", Query{Search: "alpha", Sorts: []Sort{{Column: "name"}}, Offset: 500000, Limit: 200})
+	vals := func(label string, vq ValuesQuery) {
+		start, cpu := time.Now(), cpuTime()
+		v, err := e.Values(vq)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("%-40s wall %7.1f ms  cpu %7.1f ms  distinct %d", label,
+			float64(time.Since(start).Microseconds())/1000, float64((cpuTime()-cpu).Microseconds())/1000, v.Distinct)
+	}
+	vals("values of category", ValuesQuery{Column: "category"})
+	vals("values of name (many distinct)", ValuesQuery{Column: "name"})
+	vals("values of note (all distinct)", ValuesQuery{Column: "note"})
+	vals("values of name, from cache, searched", ValuesQuery{Column: "name", Search: "alpha"})
 	for _, r := range []struct {
 		label string
 		q     Query

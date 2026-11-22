@@ -27,6 +27,17 @@ test("selects cells, ranges, columns and rows, and aggregates the range", async 
   await expect(page.locator("#agg")).toContainText("Sum11");
 });
 
+test("a Shift-click does not select the page's text", async ({ page, serve }) => {
+  const xxsv = await serve("t.csv", "a,b,s\n1,10,x\n2,20,y\n3,30,z\n");
+  await open(page, xxsv.url);
+  // A press on text, as in the formula bar, leaves the browser's selection
+  // anchor there; a Shift-click then extended the text selection to it.
+  await page.locator("#fval .v").click();
+  await page.locator('[data-sort="b"]').click({ modifiers: ["Shift"] });
+  await cell(page, 2, 2).click({ modifiers: ["Shift"] });
+  expect(await page.evaluate(() => String(getSelection()))).toBe("");
+});
+
 test("moves with the arrow keys, stops at the edges and extends with Shift", async ({ page, serve }) => {
   const xxsv = await serve("t.csv", csv(5));
   await open(page, xxsv.url);

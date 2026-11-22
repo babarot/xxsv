@@ -426,3 +426,26 @@ func TestRowsMarkInvalidCells(t *testing.T) {
 		t.Error("empty cell not reported as missing")
 	}
 }
+
+func TestValuesAPI(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.csv")
+	writeFile(t, path, "s,n\na,1\nb,2\na,3\n,4\n")
+	_, base := start(t, path)
+	resp, err := http.Post(base+"/api/values", "application/json", strings.NewReader(`{"query":{"filters":[{"column":"n","op":"range","min":"2"}]},"column":"s"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var v ValuesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 || v.Generation != 1 || v.Rows != 3 || fmt.Sprint(v.Items) != "[{b 1 false false 1} {a 1 false false 2} { 1 true false 3}]" {
+		t.Errorf("values: %d %+v %v", resp.StatusCode, v.Values, v.Items)
+	}
+	bad, _ := http.Post(base+"/api/values", "application/json", strings.NewReader(`{"column":"nope"}`))
+	if bad.StatusCode != 400 {
+		t.Errorf("unknown column: %d", bad.StatusCode)
+	}
+	bad.Body.Close()
+}

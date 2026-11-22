@@ -58,11 +58,14 @@ type Op string
 
 const (
 	OpContains Op = "contains" // any column: the raw text contains Value
-	OpEquals   Op = "equals"   // any column: the raw text equals Value; booleans ignore case
-	OpRange    Op = "range"    // integer, number, date and datetime columns
-	OpNull     Op = "null"     // the cell is missing
-	OpNotNull  Op = "notnull"  // the cell is not missing (a value, or invalid)
-	OpInvalid  Op = "invalid"  // the cell's text is not a value of the column's type
+	// OpEquals: the raw text equals Value. Boolean values ignore case and
+	// surrounding spaces; invalid text in a boolean column must equal Value
+	// exactly, like any other text.
+	OpEquals  Op = "equals"
+	OpRange   Op = "range"   // integer, number, date and datetime columns
+	OpNull    Op = "null"    // the cell is missing
+	OpNotNull Op = "notnull" // the cell is not missing (a value, or invalid)
+	OpInvalid Op = "invalid" // the cell's text is not a value of the column's type
 )
 
 // Sort is one sort key: a column and its direction. On each key, invalid,
@@ -111,8 +114,9 @@ type Engine struct {
 	t     *table.Table
 	index map[string]int
 
-	mu    sync.Mutex
-	cache []cached // most recent first
+	mu     sync.Mutex
+	cache  []cached       // most recent first
+	values []cachedValues // value counts, most recent first
 }
 
 type cached struct {
@@ -176,6 +180,19 @@ func (e *Engine) Run(q Query) (*Result, error) {
 		res.Rows = append(res.Rows, out)
 	}
 	return res, nil
+}
+
+// Rows returns the rows q matches, in its order (paging aside), and the
+// file positions of its columns. The rows are shared with the cache and
+// must not be changed.
+func (e *Engine) Rows(q Query) (rows []int32, cols []int, err error) {
+	if cols, err = e.Columns(q.Columns); err != nil {
+		return nil, nil, err
+	}
+	if rows, err = e.match(q); err != nil {
+		return nil, nil, err
+	}
+	return rows, cols, nil
 }
 
 // Columns returns the file positions of the named columns, in order: every
@@ -300,14 +317,20 @@ func (e *Engine) Aggregate(q Query, r Range) (*Aggregate, error) {
 	return out, nil
 }
 
-// match returns the matching rows in order, from the cache when possible.
-func (e *Engine) match(q Query) ([]int32, error) {
-	keyBytes, _ := json.Marshal(struct {
+// key identifies what a query's rows depend on: the search, the filters and
+// the sort keys.
+func (e *Engine) key(q Query) string {
+	b, _ := json.Marshal(struct {
 		S string
 		F []Filter
 		O []Sort
 	}{q.Search, q.Filters, q.Sorts})
-	key := string(keyBytes)
+	return string(b)
+}
+
+// match returns the matching rows in order, from the cache when possible.
+func (e *Engine) match(q Query) ([]int32, error) {
+	key := e.key(q)
 
 	e.mu.Lock()
 	for i, c := range e.cache {
@@ -428,7 +451,10 @@ func (e *Engine) compile(f Filter) (func(int) bool, error) {
 		if c.Type == table.Boolean {
 			want := strings.TrimSpace(f.Value)
 			return func(r int) bool {
-				return c.HasValue(r) && strings.EqualFold(strings.TrimSpace(c.Raw[r]), want)
+				if c.HasValue(r) {
+					return strings.EqualFold(strings.TrimSpace(c.Raw[r]), want)
+				}
+				return c.IsInvalid(r) && c.Raw[r] == f.Value
 			}, nil
 		}
 		return func(r int) bool { return c.Raw[r] == f.Value }, nil

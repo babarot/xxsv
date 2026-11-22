@@ -76,6 +76,8 @@ type Server struct {
 
 	// seed hashes the rows of every generation, so their hashes compare.
 	seed maphash.Seed
+
+	exports exports
 }
 
 // New loads the file once and returns a Server for it. The first load must
@@ -181,6 +183,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/stats", s.handleStats)
 	mux.HandleFunc("POST /api/rows", s.handleRows)
 	mux.HandleFunc("GET /api/cell", s.handleCell)
+	mux.HandleFunc("POST /api/values", s.handleValues)
+	mux.HandleFunc("POST /api/export", s.handleExportStart)
+	mux.HandleFunc("GET /api/export/{token}", s.handleExportDownload)
 	mux.HandleFunc("POST /api/aggregate", s.handleAggregate)
 	mux.HandleFunc("GET /api/events", s.handleEvents)
 	files := s.opts.UI
@@ -389,6 +394,33 @@ func (s *Server) handleAggregate(w http.ResponseWriter, r *http.Request) {
 
 // handleCell returns one cell in full. Row numbers change from one load to
 // the next, so the request names the generation it saw the row in.
+// ValuesResponse is the body of POST /api/values.
+type ValuesResponse struct {
+	Generation uint64 `json:"generation"`
+	*query.Values
+}
+
+func (s *Server) handleValues(w http.ResponseWriter, r *http.Request) {
+	var vq query.ValuesQuery
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&vq); err != nil {
+		writeError(w, http.StatusBadRequest, "bad request body: "+err.Error())
+		return
+	}
+	snap := s.cur.Load()
+	v, err := snap.engine.Values(vq)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, query.ErrBadQuery) {
+			status = http.StatusBadRequest
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, ValuesResponse{snap.gen, v})
+}
+
 func (s *Server) handleCell(w http.ResponseWriter, r *http.Request) {
 	snap := s.cur.Load()
 	qs := r.URL.Query()

@@ -12,6 +12,7 @@ import { api, post } from "./api.ts";
 import { renderPinPanel, renderSelectionInfo } from "./cell-popover.ts";
 import { renderChips } from "./chips.ts";
 import { renderColumnsMenu } from "./columns-menu.ts";
+import { restartValues } from "./values-panel.ts";
 import { renderColPop } from "./col-popover.ts";
 import { $ } from "./dom.ts";
 import { ensureVisible, layout, render, scheduleRender, scrollToRow } from "./grid.ts";
@@ -109,6 +110,7 @@ export function restartRows() {
   $<HTMLButtonElement>("fbar-filter").disabled = true;
   $("peek").hidden = true;
   renderPinPanel(null);
+  restartValues();
   writeHash(S.view);
   // After the columns changed, the header waits for the first rows to fit
   // the widths to (blockLoaded), so that it is drawn once.
