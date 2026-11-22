@@ -139,13 +139,8 @@ button { font: inherit; color: inherit; }
 .search:focus-within { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); background: var(--surface); }
 .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--text); font: inherit; }
 .search input::placeholder { color: var(--text-faint); }
-.search kbd { font: 11px var(--mono); padding: 0 5px; border-radius: 4px; border: 1px solid var(--border-strong); color: var(--text-muted); }
-/* The / mark hides while the box has focus, keeping its place: if it left
-   the layout, the .* toggle would move under the pointer between the press
-   and the release, and miss the click. */
-.search:focus-within kbd { visibility: hidden; }
 .search { position: relative; }
-.search .rx { height: 20px; min-width: 24px; padding: 0 4px; border-radius: 4px; border: 1px solid var(--border-strong); background: var(--surface); font: 11px var(--mono); color: var(--text-muted); cursor: pointer; }
+.search .rx { box-sizing: border-box; height: 20px; min-width: 24px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; padding: 0 4px; border-radius: 4px; border: 1px solid var(--border-strong); background: var(--surface); font: 11px var(--mono); color: var(--text-muted); cursor: pointer; }
 .search .rx:hover { color: var(--text); }
 .search .rx.on { background: var(--text); color: var(--surface); border-color: var(--text); }
 .search.bad { border-color: var(--danger); }

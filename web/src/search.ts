@@ -49,7 +49,7 @@ function renderToggle() {
   const rx = $<HTMLButtonElement>("search-rx");
   rx.classList.toggle("on", regexOn);
   rx.setAttribute("aria-pressed", String(regexOn));
-  $<HTMLInputElement>("search").placeholder = regexOn ? "Regex (RE2); (?i) ignores case" : "Search all cells";
+  $<HTMLInputElement>("search").placeholder = regexOn ? "Regex (RE2); (?i) ignores case" : "Type / to search";
 }
 
 export function wireSearch() {
