@@ -10,12 +10,22 @@ export function renderTop() {
   document.title = `${S.meta.file} · xxsv`;
 }
 
+// renderCounts shows the rows that match and the columns shown; when some
+// are hidden, a link to the column list says how many.
 export function renderCounts() {
   if (!S.meta) return;
   const filtered = S.view.search !== "" || S.view.filters.length > 0;
-  $("counts").textContent = filtered
-    ? `${fmt(S.total)} of ${fmt(S.meta.rows)} rows · ${S.meta.columns.length} columns`
-    : `${fmt(S.meta.rows)} rows · ${S.meta.columns.length} columns`;
+  const counts = $("counts");
+  counts.textContent = filtered
+    ? `${fmt(S.total)} of ${fmt(S.meta.rows)} rows · ${S.cols.length} columns`
+    : `${fmt(S.meta.rows)} rows · ${S.cols.length} columns`;
+  const hidden = S.meta.columns.length - S.cols.length;
+  if (hidden > 0) {
+    const b = el("button", "hidden-link", `${fmt(hidden)} hidden`) as HTMLButtonElement;
+    b.id = "hidden-link";
+    b.title = "Show the column list";
+    counts.append(" · ", b);
+  }
 }
 
 export function setBusy(on: boolean) {

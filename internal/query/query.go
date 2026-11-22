@@ -26,7 +26,12 @@ type Query struct {
 	// match regardless of case; other characters must match exactly.
 	Search  string   `json:"search,omitempty"`
 	Filters []Filter `json:"filters,omitempty"`
-	Sort    *Sort    `json:"sort,omitempty"`
+	// Sorts are the sort keys, compared in order; at most MaxSortKeys.
+	Sorts []Sort `json:"sorts,omitempty"`
+	// Columns are the columns to return and their order, by name; empty
+	// means every column in file order. They also set what an aggregate
+	// range's columns refer to.
+	Columns []string `json:"columns,omitempty"`
 	Offset  int      `json:"offset"`
 	Limit   int      `json:"limit"`
 	// MaxCellBytes cuts each returned cell to about this many bytes, at a
@@ -60,8 +65,9 @@ const (
 	OpInvalid  Op = "invalid"  // the cell's text is not a value of the column's type
 )
 
-// Sort orders rows by one column. Invalid, then missing cells come last in both
-// directions; ties keep the file order.
+// Sort is one sort key: a column and its direction. On each key, invalid,
+// then missing cells come after the values in both directions; rows equal
+// on every key keep the file order.
 type Sort struct {
 	Column string `json:"column"`
 	Desc   bool   `json:"desc,omitempty"`
@@ -73,9 +79,13 @@ type Result struct {
 	Total int `json:"total"`
 	// RowIDs are the matched rows' positions in the file, starting at 0.
 	RowIDs []int `json:"rowIds"`
-	// Rows holds the cells' raw text, cut to MaxCellBytes.
+	// Rows holds the cells' raw text, cut to MaxCellBytes, in the columns
+	// of the query (Query.Columns).
 	Rows [][]string `json:"rows"`
-	// Cut lists the cells that were cut, as [row index in Rows, column].
+	// Cols are the file positions of the returned columns, in their order.
+	Cols []int `json:"-"`
+	// Cut lists the cells that were cut, as [row index in Rows, column in
+	// Rows].
 	Cut [][2]int `json:"cut,omitempty"`
 }
 
@@ -84,6 +94,7 @@ const (
 	DefaultLimit        = 200
 	MaxLimit            = 5000
 	DefaultMaxCellBytes = 1000
+	MaxSortKeys         = 5
 )
 
 // ErrBadQuery wraps errors in a query: an unknown column, an operation the
@@ -138,20 +149,24 @@ func (e *Engine) Run(q Query) (*Result, error) {
 	if maxCell <= 0 {
 		maxCell = DefaultMaxCellBytes
 	}
+	cols, err := e.Columns(q.Columns)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := e.match(q)
 	if err != nil {
 		return nil, err
 	}
-	res := &Result{Total: len(rows), RowIDs: []int{}, Rows: [][]string{}}
+	res := &Result{Total: len(rows), RowIDs: []int{}, Rows: [][]string{}, Cols: cols}
 	if q.Offset >= len(rows) {
 		return res, nil
 	}
 	page := rows[q.Offset:min(len(rows), q.Offset+limit)]
 	for ri, r := range page {
 		res.RowIDs = append(res.RowIDs, int(r))
-		out := make([]string, len(e.t.Columns))
-		for ci, c := range e.t.Columns {
-			s := c.Raw[r]
+		out := make([]string, len(cols))
+		for ci, fi := range cols {
+			s := e.t.Columns[fi].Raw[r]
 			if len(s) > maxCell {
 				s = cut(s, maxCell)
 				res.Cut = append(res.Cut, [2]int{ri, ci})
@@ -163,6 +178,33 @@ func (e *Engine) Run(q Query) (*Result, error) {
 	return res, nil
 }
 
+// Columns returns the file positions of the named columns, in order: every
+// column for none. A name the table lacks, or one given twice, is a bad
+// query.
+func (e *Engine) Columns(names []string) ([]int, error) {
+	if len(names) == 0 {
+		cols := make([]int, len(e.t.Columns))
+		for i := range cols {
+			cols[i] = i
+		}
+		return cols, nil
+	}
+	cols := make([]int, 0, len(names))
+	seen := make(map[string]bool, len(names))
+	for _, n := range names {
+		i, ok := e.index[n]
+		if !ok {
+			return nil, badQuery("unknown column %q", n)
+		}
+		if seen[n] {
+			return nil, badQuery("column %q given twice", n)
+		}
+		seen[n] = true
+		cols = append(cols, i)
+	}
+	return cols, nil
+}
+
 // cut shortens s to at most n bytes without splitting a character.
 func cut(s string, n int) string {
 	for n > 0 && !utf8.RuneStart(s[n]) {
@@ -172,7 +214,8 @@ func cut(s string, n int) string {
 }
 
 // Range is a block of cells in the matched, sorted rows: rows R0..R1 (by
-// position after filtering and sorting) and columns C0..C1, inclusive.
+// position after filtering and sorting) and columns C0..C1 (by position in
+// the query's columns), inclusive.
 type Range struct {
 	R0 int `json:"r0"`
 	R1 int `json:"r1"`
@@ -196,6 +239,10 @@ type Aggregate struct {
 // The range is clamped to the matched rows and the columns. It reuses the
 // cached order, so scrolling or moving the range does not sort again.
 func (e *Engine) Aggregate(q Query, r Range) (*Aggregate, error) {
+	cols, err := e.Columns(q.Columns)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := e.match(q)
 	if err != nil {
 		return nil, err
@@ -208,7 +255,7 @@ func (e *Engine) Aggregate(q Query, r Range) (*Aggregate, error) {
 		r.C0, r.C1 = r.C1, r.C0
 	}
 	r.R0, r.C0 = max(r.R0, 0), max(r.C0, 0)
-	r.R1, r.C1 = min(r.R1, len(rows)-1), min(r.C1, len(e.t.Columns)-1)
+	r.R1, r.C1 = min(r.R1, len(rows)-1), min(r.C1, len(cols)-1)
 	if r.R0 > r.R1 || r.C0 > r.C1 {
 		return out, nil
 	}
@@ -217,8 +264,8 @@ func (e *Engine) Aggregate(q Query, r Range) (*Aggregate, error) {
 	// then left out, since JSON cannot carry +Inf.
 	var sum, mean float64
 	lo, hi := math.Inf(1), math.Inf(-1)
-	for ci := r.C0; ci <= r.C1; ci++ {
-		c := e.t.Columns[ci]
+	for _, fi := range cols[r.C0 : r.C1+1] {
+		c := e.t.Columns[fi]
 		for _, row := range rows[r.R0 : r.R1+1] {
 			i := int(row)
 			if c.IsMissing(i) {
@@ -258,8 +305,8 @@ func (e *Engine) match(q Query) ([]int32, error) {
 	keyBytes, _ := json.Marshal(struct {
 		S string
 		F []Filter
-		O *Sort
-	}{q.Search, q.Filters, q.Sort})
+		O []Sort
+	}{q.Search, q.Filters, q.Sorts})
 	key := string(keyBytes)
 
 	e.mu.Lock()
@@ -309,18 +356,21 @@ func (e *Engine) compute(q Query) ([]int32, error) {
 		})
 	}
 
-	var sortCol *table.Column
-	if q.Sort != nil {
-		i, ok := e.index[q.Sort.Column]
+	if len(q.Sorts) > MaxSortKeys {
+		return nil, badQuery("%d sort keys; at most %d", len(q.Sorts), MaxSortKeys)
+	}
+	keys := make([]sortKey, 0, len(q.Sorts))
+	for _, k := range q.Sorts {
+		i, ok := e.index[k.Column]
 		if !ok {
-			return nil, badQuery("unknown sort column %q", q.Sort.Column)
+			return nil, badQuery("unknown sort column %q", k.Column)
 		}
-		sortCol = e.t.Columns[i]
+		keys = append(keys, sortKey{e.t.Columns[i], k.Desc})
 	}
 
 	rows := e.filter(preds)
-	if sortCol != nil {
-		sortRows(rows, sortCol, q.Sort.Desc)
+	if len(keys) > 0 {
+		sortRows(rows, keys)
 	}
 	return rows, nil
 }
@@ -428,9 +478,43 @@ func compileRange(c *table.Column, f Filter) (func(int) bool, error) {
 	return nil, badQuery("range filter on %s column %q", c.Type, c.Name)
 }
 
-// sortRows sorts row numbers by a column, missing cells last, ties in
-// file order.
-func sortRows(rows []int32, c *table.Column, desc bool) {
+type sortKey struct {
+	c    *table.Column
+	desc bool
+}
+
+// sortRows sorts row numbers by the keys in order, ties in file order.
+func sortRows(rows []int32, keys []sortKey) {
+	cmps := make([]func(a, b int32) int, len(keys))
+	for i, k := range keys {
+		cmps[i] = keyCompare(k.c, k.desc)
+	}
+	// Comparing row numbers last makes the order total, so the faster
+	// unstable sort gives the same result as a stable one.
+	if len(cmps) == 1 {
+		cmp := cmps[0]
+		slices.SortFunc(rows, func(a, b int32) int {
+			if r := cmp(a, b); r != 0 {
+				return r
+			}
+			return cmp3(int64(a), int64(b))
+		})
+		return
+	}
+	slices.SortFunc(rows, func(a, b int32) int {
+		for _, cmp := range cmps {
+			if r := cmp(a, b); r != 0 {
+				return r
+			}
+		}
+		return cmp3(int64(a), int64(b))
+	})
+}
+
+// keyCompare compares two rows on one column. Values come first in the order
+// asked for, then invalid cells, then missing ones, both last in either
+// direction; two invalid or two missing cells are equal on this key.
+func keyCompare(c *table.Column, desc bool) func(a, b int32) int {
 	sign := 1
 	if desc {
 		sign = -1
@@ -444,26 +528,19 @@ func sortRows(rows []int32, c *table.Column, desc bool) {
 		v := c.Floats
 		cmpValues = func(a, b int32) int { return cmp3(v[a], v[b]) }
 	case table.Boolean:
-		// false < true; Raw holds any case, so compare lower-cased.
-		key := func(r int32) bool { return strings.EqualFold(strings.TrimSpace(c.Raw[r]), "true") }
-		cmpValues = func(a, b int32) int {
-			ka, kb := key(a), key(b)
-			switch {
-			case ka == kb:
-				return 0
-			case kb:
-				return -1
+		// false < true. Raw holds any case and spacing, so read each cell
+		// once instead of in every comparison.
+		v := make([]int64, len(c.Raw))
+		for i, s := range c.Raw {
+			if strings.EqualFold(strings.TrimSpace(s), "true") {
+				v[i] = 1
 			}
-			return 1
 		}
+		cmpValues = func(a, b int32) int { return cmp3(v[a], v[b]) }
 	default:
 		v := c.Raw
 		cmpValues = func(a, b int32) int { return strings.Compare(v[a], v[b]) }
 	}
-	// Values come first in the order asked for, then invalid cells, then
-	// missing ones, both in file order and both last in either direction.
-	// Comparing row numbers last makes the order total, so the faster
-	// unstable sort gives the same result as a stable one.
 	kind := func(r int32) int64 {
 		switch {
 		case c.HasValue(int(r)):
@@ -473,22 +550,13 @@ func sortRows(rows []int32, c *table.Column, desc bool) {
 		}
 		return 2
 	}
-	slices.SortFunc(rows, func(a, b int32) int {
+	return func(a, b int32) int {
 		// Most pairs both hold values: one bit test each.
 		if !c.HasValue(int(a)) || !c.HasValue(int(b)) {
-			ka, kb := kind(a), kind(b)
-			switch {
-			case ka != kb:
-				return cmp3(ka, kb)
-			case ka != 0:
-				return cmp3(int64(a), int64(b))
-			}
+			return cmp3(kind(a), kind(b))
 		}
-		if r := sign * cmpValues(a, b); r != 0 {
-			return r
-		}
-		return cmp3(int64(a), int64(b))
-	})
+		return sign * cmpValues(a, b)
+	}
 }
 
 func cmp3[T int64 | float64](a, b T) int {

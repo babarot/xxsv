@@ -105,18 +105,18 @@ func TestAPI(t *testing.T) {
 		t.Errorf("stats: %+v", st)
 	}
 
-	code, r := postRows(t, base, `{"sort":{"column":"id","desc":true},"limit":2}`)
+	code, r := postRows(t, base, `{"sorts":[{"column":"id","desc":true}],"limit":2}`)
 	if code != 200 || r.Total != 3 || len(r.Rows) != 2 || r.Rows[0][1] != "carol" || r.Generation != 1 {
 		t.Errorf("rows: %d %+v", code, r)
 	}
-	if code, _ := postRows(t, base, `{"sort":{"column":"nope"}}`); code != 400 {
+	if code, _ := postRows(t, base, `{"sorts":[{"column":"nope"}]}`); code != 400 {
 		t.Errorf("bad sort column: %d", code)
 	}
 	if code, _ := postRows(t, base, `{"bogus":1}`); code != 400 {
 		t.Errorf("unknown field: %d", code)
 	}
 
-	agg, err := http.Post(base+"/api/aggregate", "application/json", strings.NewReader(`{"sort":{"column":"id","desc":true},"r0":0,"r1":1,"c0":0,"c1":1}`))
+	agg, err := http.Post(base+"/api/aggregate", "application/json", strings.NewReader(`{"sorts":[{"column":"id","desc":true}],"r0":0,"r1":1,"c0":0,"c1":1}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,9 +359,20 @@ func TestChanges(t *testing.T) {
 		t.Errorf("file order: changed %v, added %v", r.Changed, r.Added)
 	}
 	// Sorted by id descending: 9 (added), 4, 3 (changed), 2.
-	_, r = postRows(t, srv.URL, `{"sort":{"column":"id","desc":true}}`)
+	_, r = postRows(t, srv.URL, `{"sorts":[{"column":"id","desc":true}]}`)
 	if fmt.Sprint(r.RowIDs) != "[3 2 1 0]" || fmt.Sprint(r.Changed) != "[[2 1]]" || fmt.Sprint(r.Added) != "[0]" {
 		t.Errorf("sorted: rows %v, changed %v, added %v", r.RowIDs, r.Changed, r.Added)
+	}
+
+	// With the columns reordered and name hidden, no change shows; with
+	// name first, the change is at position 0.
+	_, r = postRows(t, srv.URL, `{"columns":["id"]}`)
+	if r.Changed != nil || fmt.Sprint(r.Added) != "[3]" {
+		t.Errorf("name hidden: changed %v, added %v", r.Changed, r.Added)
+	}
+	_, r = postRows(t, srv.URL, `{"columns":["name","id"]}`)
+	if fmt.Sprint(r.Changed) != "[[1 0]]" {
+		t.Errorf("name first: changed %v", r.Changed)
 	}
 
 	// A save without changes clears the marks.
@@ -397,6 +408,13 @@ func TestRowsMarkInvalidCells(t *testing.T) {
 	_, r := postRows(t, srv.URL, `{"offset":29,"limit":5}`)
 	if fmt.Sprint(r.Invalid) != "[[1 0]]" {
 		t.Errorf("invalid: %v", r.Invalid)
+	}
+	_, r = postRows(t, srv.URL, `{"offset":29,"limit":5,"columns":["s","n"]}`)
+	if fmt.Sprint(r.Invalid) != "[[1 1]]" {
+		t.Errorf("invalid with n second: %v", r.Invalid)
+	}
+	if code, _ := postRows(t, srv.URL, `{"columns":["nope"]}`); code != 400 {
+		t.Errorf("unknown column: %d, want 400", code)
 	}
 	var cell struct{ Null bool }
 	getJSON(t, srv.URL+"/api/cell?gen=1&row=30&col=0", &cell)

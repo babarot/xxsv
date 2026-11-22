@@ -3,7 +3,7 @@ import { NULL_MARK } from "./constants.ts";
 import { abbr, edgeLabel, fmt, histStep, invalidText, isRange, round } from "./format.ts";
 import { icon } from "./icons.ts";
 import type { Column, Filter, Stats } from "./types.ts";
-import { S, setFilter, toggleColPop, toggleMissing } from "./app.ts";
+import { S, setFilter, showColumns, toggleColPop, toggleMissing } from "./app.ts";
 import { positionPopovers } from "./cell-popover.ts";
 import { barsMax, histOf, histogram, missingLine, rowsOf, topBars } from "./charts.ts";
 import { $, el } from "./dom.ts";
@@ -14,7 +14,7 @@ export function renderColPop() {
     pop.hidden = true;
     return;
   }
-  const c = S.meta.columns[S.colPop];
+  const c = S.cols[S.colPop];
   const s = S.stats[S.colPop];
   pop.replaceChildren();
   const title = el("div", "col-title");
@@ -68,6 +68,7 @@ export function renderColPop() {
     pop.appendChild(kv);
   }
   pop.appendChild(filterForm(c, s));
+  pop.appendChild(hideButton(c));
   pop.hidden = false;
   positionPopovers();
 }
@@ -151,4 +152,16 @@ export function filterForm(c: Column, s?: Stats) {
   }
   box.appendChild(actions);
   return box;
+}
+
+// hideButton hides the popover's column; the last column shown stays.
+function hideButton(c: Column) {
+  const b = el("button", "btn-ghost") as HTMLButtonElement;
+  b.append(icon("eye-off", 13), el("span", "btn-label", "Hide column"));
+  b.disabled = S.cols.length === 1;
+  b.title = b.disabled ? "The last column shown cannot be hidden" : "Hide this column (Columns shows it again)";
+  b.addEventListener("click", () => showColumns(S.cols.map((x) => x.name).filter((n) => n !== c.name)));
+  const row = el("div", "actions col-actions");
+  row.appendChild(b);
+  return row;
 }

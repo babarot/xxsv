@@ -5,12 +5,13 @@ import { MAX_CELL_BYTES } from "./constants.ts";
 import { readHash, writeHash } from "./hash.ts";
 import { Rows, blockOf } from "./rows.ts";
 import { moved, range } from "./selection.ts";
-import { applyMeta, applyStats, fitWidths, newQuery, newState, rowsShown } from "./state.ts";
+import { applyMeta, applyStats, fitWidths, newQuery, newState, nextSorts, rowsShown, setColumns } from "./state.ts";
 import type { Filter, Meta, Pos, RowsResponse, Stats } from "./types.ts";
 import { cancelAggregate, requestAggregate } from "./aggregate.ts";
 import { api, post } from "./api.ts";
 import { renderPinPanel, renderSelectionInfo } from "./cell-popover.ts";
 import { renderChips } from "./chips.ts";
+import { renderColumnsMenu } from "./columns-menu.ts";
 import { renderColPop } from "./col-popover.ts";
 import { $ } from "./dom.ts";
 import { ensureVisible, layout, render, scheduleRender, scrollToRow } from "./grid.ts";
@@ -51,6 +52,7 @@ export async function doRefresh() {
     renderTop();
     renderStatus();
     renderChips();
+    renderColumnsMenu();
     restartRows();
     if (!$("settings").hidden) renderAbout();
     const s = await stats;
@@ -65,16 +67,28 @@ export async function doRefresh() {
 
 export const selRange = () => range(S.cur, S.anchor);
 
-export function cycleSort(column: string) {
-  if (S.view.sort?.column !== column) S.view.sort = { column };
-  else if (!S.view.sort.desc) S.view.sort = { column, desc: true };
-  else S.view.sort = null;
+// cycleSort sorts by a clicked column name. A click sorts by that column
+// alone, cycling ascending, descending and off; with add (Shift), the column
+// is added as the last key, or its key cycles ascending, descending and off,
+// leaving the other keys.
+export function cycleSort(column: string, add: boolean) {
+  S.view.sorts = nextSorts(S.view.sorts, column, add);
   S.view.top = 0;
   resetRows();
 }
 
 export function currentQuery() {
-  return { search: S.view.search, filters: S.view.filters, sort: S.view.sort ?? undefined };
+  return { search: S.view.search, filters: S.view.filters, sorts: S.view.sorts, columns: S.view.columns ?? undefined };
+}
+
+// showColumns shows the named columns in that order (null: every column),
+// and starts the rows over, since they come in the shown columns. The
+// scroll position stays.
+export function showColumns(names: string[] | null) {
+  setColumns(S, names);
+  $("colpop").hidden = true;
+  renderCounts();
+  resetRows();
 }
 
 // resetRows starts over after the query changed (state.ts: newQuery).
@@ -163,7 +177,7 @@ export function setFilter(column: string, f: Filter | null) {
 
 export function moveBy(dr: number, dc: number, extend: boolean) {
   if (!S.meta || S.total === 0) return;
-  const p = moved(S.cur, dr, dc, S.total, S.meta.columns.length);
+  const p = moved(S.cur, dr, dc, S.total, S.cols.length);
   ensureVisible(p);
   select(p, extend);
 }

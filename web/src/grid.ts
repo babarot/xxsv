@@ -52,7 +52,7 @@ export const cellAt = (p: Pos) => (S.meta ? rows.cell(p) : null);
 export function isLong(p: Pos) {
   const cell = cellAt(p);
   if (!cell || cell.value === "" || !S.meta) return false;
-  const t = S.meta.columns[p.c].type;
+  const t = S.cols[p.c].type;
   return t === "json" || cell.cut || (!isNum(t) && cell.value.length > LONG_CHARS);
 }
 
@@ -69,7 +69,7 @@ export function render() {
   }
 
   const template = gridTemplate();
-  const cols = S.meta.columns;
+  const cols = S.cols;
   // Rows are rebuilt on every scroll, so the flash animation starts with a
   // negative delay to pick up where it is: a row scrolled into view late
   // glows for the time left.

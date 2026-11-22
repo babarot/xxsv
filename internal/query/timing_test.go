@@ -37,10 +37,12 @@ func TestQueryTiming(t *testing.T) {
 		t.Logf("%-40s wall %7.1f ms  cpu %7.1f ms  total %d", label,
 			float64(time.Since(start).Microseconds())/1000, float64((cpuTime()-cpu).Microseconds())/1000, res.Total)
 	}
-	run("sort qty (integer)", Query{Sort: &Sort{Column: "qty"}})
-	run("sort price desc (number)", Query{Sort: &Sort{Column: "price", Desc: true}})
-	run("sort name (string)", Query{Sort: &Sort{Column: "name"}})
-	run("sort day (date)", Query{Sort: &Sort{Column: "day"}})
+	run("sort qty (integer)", Query{Sorts: []Sort{{Column: "qty"}}})
+	run("sort price desc (number)", Query{Sorts: []Sort{{Column: "price", Desc: true}}})
+	run("sort name (string)", Query{Sorts: []Sort{{Column: "name"}}})
+	run("sort day (date)", Query{Sorts: []Sort{{Column: "day"}}})
+	run("sort category, then price desc", Query{Sorts: []Sort{{Column: "category"}, {Column: "price", Desc: true}}})
+	run("sort ok, then name (many ties)", Query{Sorts: []Sort{{Column: "ok"}, {Column: "name"}}})
 	run("search \"zulu yankee\"", Query{Search: "zulu yankee"})
 	run("search \"no-such-text\"", Query{Search: "no-such-text"})
 	run("search \"2021-03\"", Query{Search: "2021-03"})
@@ -48,8 +50,8 @@ func TestQueryTiming(t *testing.T) {
 		{Column: "price", Op: OpRange, Min: "100", Max: "200"},
 		{Column: "category", Op: OpContains, Value: "cat1"},
 	}})
-	run("search + sort name", Query{Search: "alpha", Sort: &Sort{Column: "name"}})
-	run("page from cache (offset 500000)", Query{Search: "alpha", Sort: &Sort{Column: "name"}, Offset: 500000, Limit: 200})
+	run("search + sort name", Query{Search: "alpha", Sorts: []Sort{{Column: "name"}}})
+	run("page from cache (offset 500000)", Query{Search: "alpha", Sorts: []Sort{{Column: "name"}}, Offset: 500000, Limit: 200})
 	for _, r := range []struct {
 		label string
 		q     Query
@@ -57,7 +59,7 @@ func TestQueryTiming(t *testing.T) {
 	}{
 		{"aggregate whole price column", Query{}, Range{R0: 0, R1: 1 << 30, C0: 2, C1: 2}},
 		{"aggregate all 10 columns", Query{}, Range{R0: 0, R1: 1 << 30, C0: 0, C1: 9}},
-		{"aggregate sorted, cached order", Query{Sort: &Sort{Column: "price"}}, Range{R0: 0, R1: 1 << 30, C0: 1, C1: 2}},
+		{"aggregate sorted, cached order", Query{Sorts: []Sort{{Column: "price"}}}, Range{R0: 0, R1: 1 << 30, C0: 1, C1: 2}},
 	} {
 		_, _ = e.Aggregate(r.q, Range{}) // warm the order cache, as scrolling would
 		start, cpu := time.Now(), cpuTime()

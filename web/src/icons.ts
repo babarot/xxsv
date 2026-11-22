@@ -1,16 +1,19 @@
 // Icons from Lucide (ISC license), bundled: only the icons named here end
 // up in app.js, and nothing is fetched at run time (the CSP allows no other
 // origin). Icons draw in currentColor, so they follow the theme.
-import { ArrowDown, ArrowUp, Check, Contrast, Copy, Funnel, Link, Maximize2, Moon, Pin, PinOff, Search, Settings, Sun, X, createElement } from "lucide";
+import { ArrowDown, ArrowUp, Check, Columns3, Contrast, Copy, EyeOff, Funnel, GripVertical, Link, Maximize2, Moon, Pin, PinOff, Search, Settings, Sun, X, createElement } from "lucide";
 import type { IconNode } from "lucide";
 
 const ICONS: Record<string, IconNode> = {
   "arrow-down": ArrowDown,
   "arrow-up": ArrowUp,
   check: Check,
+  columns: Columns3,
   contrast: Contrast,
   copy: Copy,
+  "eye-off": EyeOff,
   filter: Funnel,
+  grip: GripVertical,
   link: Link,
   maximize: Maximize2,
   moon: Moon,

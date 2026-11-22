@@ -38,7 +38,7 @@ function renderFbarFilter(col: Column | null, cell: CellInfo | null, value: stri
 export function renderSelectionInfo() {
   if (!S.meta) return;
   $("namebox").textContent = nameBox(S.cur, S.anchor);
-  const col = S.meta.columns[S.cur.c];
+  const col = S.cols[S.cur.c];
   const cell = cellAt(S.cur);
   const fval = $("fval");
   fval.replaceChildren();
@@ -56,7 +56,7 @@ export function renderSelectionInfo() {
   if (cell.cut && full === null) {
     const want = key;
     const epoch = S.epoch;
-    api<{ value: string }>(`/api/cell?gen=${S.meta.generation}&row=${cell.rowId}&col=${S.cur.c}`)
+    api<{ value: string }>(`/api/cell?gen=${S.meta.generation}&row=${cell.rowId}&col=${S.fileIdx[S.cur.c]}`)
       .then((res) => {
         if (epoch !== S.epoch) return; // the query or the file changed meanwhile
         S.fullValue = { key: want, value: res.value };

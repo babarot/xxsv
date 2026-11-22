@@ -89,7 +89,7 @@ func TestBadQueries(t *testing.T) {
 		{Filters: []Filter{{Column: "name", Op: OpRange, Min: "a"}}},
 		{Filters: []Filter{{Column: "score", Op: OpRange, Min: "x"}}},
 		{Filters: []Filter{{Column: "name", Op: "regex"}}},
-		{Sort: &Sort{Column: "nope"}},
+		{Sorts: []Sort{{Column: "nope"}}},
 		{Offset: -1},
 	} {
 		if _, err := e.Run(q); !errors.Is(err, ErrBadQuery) {
@@ -100,20 +100,37 @@ func TestBadQueries(t *testing.T) {
 
 func TestSort(t *testing.T) {
 	e := engine(t, sample)
-	eq(t, "number asc, missing last, ties stable", ids(t, e, Query{Sort: &Sort{Column: "score"}}), []int{2, 0, 3, 4, 1})
-	eq(t, "number desc, missing still last", ids(t, e, Query{Sort: &Sort{Column: "score", Desc: true}}), []int{4, 0, 3, 2, 1})
-	eq(t, "string asc is byte order", ids(t, e, Query{Sort: &Sort{Column: "name"}}), []int{2, 0, 1, 3, 4})
-	eq(t, "date asc", ids(t, e, Query{Sort: &Sort{Column: "day"}}), []int{2, 0, 4, 1, 3})
-	eq(t, "boolean false first", ids(t, e, Query{Sort: &Sort{Column: "ok"}}), []int{1, 3, 0, 2, 4})
+	eq(t, "number asc, missing last, ties stable", ids(t, e, Query{Sorts: []Sort{{Column: "score"}}}), []int{2, 0, 3, 4, 1})
+	eq(t, "number desc, missing still last", ids(t, e, Query{Sorts: []Sort{{Column: "score", Desc: true}}}), []int{4, 0, 3, 2, 1})
+	eq(t, "string asc is byte order", ids(t, e, Query{Sorts: []Sort{{Column: "name"}}}), []int{2, 0, 1, 3, 4})
+	eq(t, "date asc", ids(t, e, Query{Sorts: []Sort{{Column: "day"}}}), []int{2, 0, 4, 1, 3})
+	eq(t, "boolean false first", ids(t, e, Query{Sorts: []Sort{{Column: "ok"}}}), []int{1, 3, 0, 2, 4})
 	eq(t, "sort after filter", ids(t, e, Query{
 		Filters: []Filter{{Column: "score", Op: OpNotNull}},
-		Sort:    &Sort{Column: "id", Desc: true},
+		Sorts:   []Sort{{Column: "id", Desc: true}},
 	}), []int{4, 3, 2, 0})
+}
+
+func TestSortKeys(t *testing.T) {
+	e := engine(t, sample)
+	eq(t, "score asc, then name desc", ids(t, e, Query{Sorts: []Sort{{Column: "score"}, {Column: "name", Desc: true}}}), []int{2, 3, 0, 4, 1})
+	eq(t, "ok asc, then score desc", ids(t, e, Query{Sorts: []Sort{{Column: "ok"}, {Column: "score", Desc: true}}}), []int{3, 1, 0, 2, 4})
+	// Two missing cells are equal on the first key, so the second orders them.
+	m := engine(t, "a,b\n,2\nx,1\n,1\n")
+	eq(t, "missing first key, ordered by the second", ids(t, m, Query{Sorts: []Sort{{Column: "a"}, {Column: "b"}}}), []int{1, 2, 0})
+	eq(t, "equal on every key: file order", ids(t, m, Query{Sorts: []Sort{{Column: "a"}}}), []int{1, 0, 2})
+	six := make([]Sort, MaxSortKeys+1)
+	for i := range six {
+		six[i] = Sort{Column: "id"}
+	}
+	if _, err := e.Run(Query{Sorts: six}); !errors.Is(err, ErrBadQuery) {
+		t.Errorf("%d sort keys: got %v, want ErrBadQuery", len(six), err)
+	}
 }
 
 func TestPaging(t *testing.T) {
 	e := engine(t, sample)
-	res, err := e.Run(Query{Sort: &Sort{Column: "id", Desc: true}, Offset: 1, Limit: 2})
+	res, err := e.Run(Query{Sorts: []Sort{{Column: "id", Desc: true}}, Offset: 1, Limit: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +154,7 @@ func TestCut(t *testing.T) {
 
 func TestCacheReuse(t *testing.T) {
 	e := engine(t, sample)
-	q := Query{Search: "o", Sort: &Sort{Column: "name"}}
+	q := Query{Search: "o", Sorts: []Sort{{Column: "name"}}}
 	first, _ := e.match(q)
 	q.Offset, q.Limit = 1, 1
 	second, _ := e.match(q)
@@ -169,6 +186,38 @@ func TestContainsFold(t *testing.T) {
 	}
 }
 
+func TestColumns(t *testing.T) {
+	e := engine(t, sample)
+	res, err := e.Run(Query{Columns: []string{"name", "id"}, Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	eq(t, "rows in the asked order", res.Rows, [][]string{{"alice", "1"}, {"bob", "2"}})
+	eq(t, "file positions", res.Cols, []int{1, 0})
+	all, _ := e.Run(Query{Limit: 1})
+	eq(t, "no columns: every column", all.Cols, []int{0, 1, 2, 3, 4, 5})
+	// A hidden column still filters and sorts.
+	eq(t, "sort by a hidden column", ids(t, e, Query{Columns: []string{"name"}, Sorts: []Sort{{Column: "score", Desc: true}}}), []int{4, 0, 3, 2, 1})
+	// Cut cells are reported at their position in the returned columns.
+	long := engine(t, "a,b\nx,"+strings.Repeat("y", 50)+"\n")
+	cut, _ := e.Run(Query{})
+	eq(t, "no cut", len(cut.Cut), 0)
+	cut, _ = long.Run(Query{Columns: []string{"b", "a"}, MaxCellBytes: 10})
+	eq(t, "cut at its returned position", cut.Cut, [][2]int{{0, 0}})
+	for _, cols := range [][]string{{"nope"}, {"id", "id"}} {
+		if _, err := e.Run(Query{Columns: cols}); !errors.Is(err, ErrBadQuery) {
+			t.Errorf("columns %v: got %v, want ErrBadQuery", cols, err)
+		}
+	}
+	// An aggregate's columns are positions in the query's columns: score,
+	// then id.
+	a, err := e.Aggregate(Query{Columns: []string{"score", "id"}}, Range{R0: 0, R1: 4, C0: 1, C1: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	eq(t, "aggregate over the second returned column (id)", *a.Sum, 15.0)
+}
+
 func TestAggregate(t *testing.T) {
 	e := engine(t, sample)
 	// sample: id 1..5; score 3.5, missing, 1.25, 3.5, 10; name strings
@@ -193,14 +242,14 @@ func TestAggregate(t *testing.T) {
 	eq(t, "no sum", a.Sum == nil, true)
 
 	// follows the query's order and filter; reversed and out-of-range bounds are fine
-	a, _ = e.Aggregate(Query{Sort: &Sort{Column: "id", Desc: true}}, Range{R0: 1, R1: 0, C0: 0, C1: 0})
+	a, _ = e.Aggregate(Query{Sorts: []Sort{{Column: "id", Desc: true}}}, Range{R0: 1, R1: 0, C0: 0, C1: 0})
 	eq(t, "sorted first two ids", *a.Sum, 9.0)
 	a, _ = e.Aggregate(Query{Filters: []Filter{{Column: "ok", Op: OpEquals, Value: "false"}}}, Range{R0: 0, R1: 99, C0: 0, C1: 0})
 	eq(t, "filtered", *a.Sum, 6.0)
 	a, _ = e.Aggregate(Query{Search: "zzz"}, Range{R0: 0, R1: 9, C0: 0, C1: 0})
 	eq(t, "empty", a.Count, 0)
 
-	if _, err := e.Aggregate(Query{Sort: &Sort{Column: "nope"}}, Range{}); !errors.Is(err, ErrBadQuery) {
+	if _, err := e.Aggregate(Query{Sorts: []Sort{{Column: "nope"}}}, Range{}); !errors.Is(err, ErrBadQuery) {
 		t.Errorf("bad sort: %v", err)
 	}
 }
@@ -234,7 +283,7 @@ func TestInvalidAndMissing(t *testing.T) {
 	eq(t, "missing", ids(t, e, Query{Filters: []Filter{{Column: "n", Op: OpNull}}}), []int{41, 42})
 	eq(t, "not missing", len(ids(t, e, Query{Filters: []Filter{{Column: "n", Op: OpNotNull}}})), 41)
 	for _, desc := range []bool{false, true} {
-		got := ids(t, e, Query{Sort: &Sort{Column: "n", Desc: desc}})
+		got := ids(t, e, Query{Sorts: []Sort{{Column: "n", Desc: desc}}})
 		eq(t, "invalid then missing last", got[40:], []int{40, 41, 42})
 	}
 	agg, err := e.Aggregate(Query{}, Range{R0: 38, R1: 42, C0: 0, C1: 0})

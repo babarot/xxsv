@@ -293,12 +293,12 @@ type RowsResponse struct {
 	Generation uint64 `json:"generation"`
 	*query.Result
 	// Changed lists the cells changed since the previous generation, as
-	// [row index in Rows, column]; Added lists the rows added, as row
-	// indexes in Rows.
+	// [row index in Rows, column in Rows]; Added lists the rows added, as
+	// row indexes in Rows.
 	Changed [][2]int `json:"changed,omitempty"`
 	Added   []int    `json:"added,omitempty"`
 	// Invalid lists the cells whose text is not a value of their column's
-	// type, as [row index in Rows, column].
+	// type, as [row index in Rows, column in Rows].
 	Invalid [][2]int `json:"invalid,omitempty"`
 }
 
@@ -321,7 +321,16 @@ func (s *Server) handleRows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := RowsResponse{Generation: snap.gen, Result: res}
-	for ci, c := range snap.table.Columns {
+	// pos maps a file column to its position in Rows, or -1 when hidden.
+	pos := make([]int, len(snap.table.Columns))
+	for i := range pos {
+		pos[i] = -1
+	}
+	for ci, fi := range res.Cols {
+		pos[fi] = ci
+	}
+	for ci, fi := range res.Cols {
+		c := snap.table.Columns[fi]
 		for i, id := range res.RowIDs {
 			if c.IsInvalid(id) {
 				resp.Invalid = append(resp.Invalid, [2]int{i, ci})
@@ -335,7 +344,9 @@ func (s *Server) handleRows(w http.ResponseWriter, r *http.Request) {
 				resp.Added = append(resp.Added, i)
 			}
 			for _, c := range cols {
-				resp.Changed = append(resp.Changed, [2]int{i, int(c)})
+				if p := pos[c]; p >= 0 {
+					resp.Changed = append(resp.Changed, [2]int{i, p})
+				}
 			}
 		}
 	}
@@ -343,11 +354,12 @@ func (s *Server) handleRows(w http.ResponseWriter, r *http.Request) {
 }
 
 // AggregateRequest is the body of POST /api/aggregate: the same search,
-// filters and sort as /api/rows, and the range of cells in that order.
+// filters and sort keys as /api/rows, and the range of cells in that order.
 type AggregateRequest struct {
 	Search  string         `json:"search,omitempty"`
 	Filters []query.Filter `json:"filters,omitempty"`
-	Sort    *query.Sort    `json:"sort,omitempty"`
+	Sorts   []query.Sort   `json:"sorts,omitempty"`
+	Columns []string       `json:"columns,omitempty"`
 	query.Range
 }
 
@@ -360,7 +372,7 @@ func (s *Server) handleAggregate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	snap := s.cur.Load()
-	agg, err := snap.engine.Aggregate(query.Query{Search: req.Search, Filters: req.Filters, Sort: req.Sort}, req.Range)
+	agg, err := snap.engine.Aggregate(query.Query{Search: req.Search, Filters: req.Filters, Sorts: req.Sorts, Columns: req.Columns}, req.Range)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, query.ErrBadQuery) {

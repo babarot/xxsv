@@ -11,6 +11,7 @@ import { writeHashNow } from "./hash.ts";
 import { hydrateIcons } from "./icons.ts";
 import { wholeColumn, wholeRow } from "./selection.ts";
 import { S, cycleSort, moveBy, refresh, resetRows, select, toggleColPop, toggleMissing } from "./app.ts";
+import { columnsMenuOpen, renderColumnsMenu, toggleColumnsMenu } from "./columns-menu.ts";
 import { filterBySelected, renderSelectionInfo } from "./cell-popover.ts";
 import { $, copyText } from "./dom.ts";
 import { grid, isLong, scheduleRender } from "./grid.ts";
@@ -51,15 +52,15 @@ function setup() {
       return;
     }
     const nm = t.closest<HTMLElement>("[data-sort]");
-    if (nm) return cycleSort(nm.dataset.sort!);
+    if (nm) return cycleSort(nm.dataset.sort!, e.shiftKey);
     // The hatched missing part of a distribution filters to missing cells.
     const miss = t.closest<HTMLElement>("[data-missing]");
-    if (miss) return toggleMissing(S.meta.columns[Number(miss.dataset.missing)].name);
+    if (miss) return toggleMissing(S.cols[Number(miss.dataset.missing)].name);
     const pf = t.closest<HTMLElement>("[data-prof]");
     if (pf) return toggleColPop(Number(pf.dataset.prof));
     const rh = t.closest<HTMLElement>(".rh[data-row]");
     if (rh) {
-      [S.cur, S.anchor] = wholeRow(Number(rh.dataset.row), S.meta.columns.length);
+      [S.cur, S.anchor] = wholeRow(Number(rh.dataset.row), S.cols.length);
       select(S.cur, true);
       return;
     }
@@ -94,6 +95,7 @@ function setup() {
     const typing = t instanceof HTMLInputElement || t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement;
     if (e.key === "Escape") {
       if (!$("settings").hidden) toggleSettings(false);
+      else if (columnsMenuOpen()) toggleColumnsMenu(false);
       else if (typing) (t as HTMLElement).blur();
       else if (S.colPop !== null) toggleColPop(S.colPop);
       else if (S.expanded) { S.expanded = false; renderSelectionInfo(); }
@@ -118,6 +120,17 @@ function setup() {
   });
 
   $("fbar-filter").addEventListener("click", filterBySelected);
+  $("cols-btn").addEventListener("click", () => toggleColumnsMenu());
+  // The "N hidden" link next to the counts opens the column list too.
+  $("counts").addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest("#hidden-link")) toggleColumnsMenu(true);
+  });
+  // A press outside the column list closes it.
+  document.addEventListener("mousedown", (e) => {
+    const t = e.target as HTMLElement;
+    if (columnsMenuOpen() && !t.closest("#colmenu, #cols-btn, #hidden-link")) toggleColumnsMenu(false);
+  });
+  window.addEventListener("resize", renderColumnsMenu);
   $("settings-btn").addEventListener("click", () => toggleSettings());
   $("settings-close").addEventListener("click", () => toggleSettings(false));
   $("settings").addEventListener("click", (e) => { if (e.target === e.currentTarget) toggleSettings(false); });
