@@ -37,6 +37,12 @@ function setup() {
   });
 
   const g = grid();
+  // A Shift-press in the table extends the range or adds a sort key; the
+  // browser would also extend its text selection over the header's labels
+  // and the formula bar, so that is stopped.
+  g.addEventListener("mousedown", (e) => {
+    if (e.shiftKey) e.preventDefault();
+  });
   g.addEventListener("click", (e) => {
     if (!S.meta) return;
     const t = e.target as HTMLElement;
