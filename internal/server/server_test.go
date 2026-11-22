@@ -449,3 +449,47 @@ func TestValuesAPI(t *testing.T) {
 	}
 	bad.Body.Close()
 }
+
+func TestRowAPI(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.csv")
+	long := strings.Repeat("é", rowCellBytes) // 2 bytes each: cut
+	writeFile(t, path, "a,b,c\nx,,"+long+"\n")
+	_, base := start(t, path)
+	var r struct {
+		Generation uint64
+		Cells      []RowCell
+	}
+	if code := getJSON(t, base+"/api/row?gen=1&row=0", &r); code != 200 {
+		t.Fatalf("row: %d", code)
+	}
+	if len(r.Cells) != 3 || r.Cells[0].Value != "x" || !r.Cells[1].Null || !r.Cells[2].Cut || len(r.Cells[2].Value) != rowCellBytes {
+		t.Errorf("cells: %+v", r.Cells[:2])
+	}
+	for url, want := range map[string]int{"/api/row?gen=2&row=0": 409, "/api/row?gen=1&row=5": 404, "/api/row?gen=x": 400} {
+		if code := getJSON(t, base+url, nil); code != want {
+			t.Errorf("%s: %d, want %d", url, code, want)
+		}
+	}
+}
+
+func TestCheckAPI(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.csv")
+	writeFile(t, path, "a\nx\n")
+	_, base := start(t, path)
+	for body, want := range map[string]string{
+		`{"search":"x(","regex":true}`:  "search: error parsing regexp: missing closing ): `x(`",
+		`{"search":"x(","regex":false}`: "",
+		`{"columns":["nope"]}`:          `unknown column "nope"`,
+	} {
+		resp, err := http.Post(base+"/api/check", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var v struct{ Error string }
+		_ = json.NewDecoder(resp.Body).Decode(&v)
+		resp.Body.Close()
+		if resp.StatusCode != 200 || v.Error != want {
+			t.Errorf("%s: %d %q, want %q", body, resp.StatusCode, v.Error, want)
+		}
+	}
+}

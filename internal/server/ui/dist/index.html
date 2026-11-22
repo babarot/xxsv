@@ -25,8 +25,9 @@
     <button id="export-btn" class="btn-ghost tb-btn" title="Export the current view"><i data-icon="download" data-size="14"></i><span class="btn-label">Export</span></button>
     <label class="search">
       <i data-icon="search" data-size="14"></i>
-      <input id="search" type="search" placeholder="Search all cells" autocomplete="off" spellcheck="false">
-      <kbd>/</kbd>
+      <input id="search" type="search" placeholder="Type / to search" aria-label="Search all cells" autocomplete="off" spellcheck="false">
+      <button id="search-rx" class="rx" title="Regular expression (RE2): case-sensitive; (?i) ignores case" aria-label="Regular expression" aria-pressed="false">.*</button>
+      <span id="search-err" class="search-err" hidden></span>
     </label>
     <button id="settings-btn" class="btn-ghost btn-square" title="Settings" aria-label="Settings"><i data-icon="settings"></i></button>
   </header>
@@ -35,6 +36,7 @@
     <div class="fx">fx</div>
     <div id="fval"></div>
     <button id="fbar-filter" class="btn-icon" title="Filter by this value" aria-label="Filter by this value" disabled><i data-icon="filter" data-size="13"></i></button>
+    <button id="fbar-row" class="btn-icon" title="Show the row (Enter)" aria-label="Show the row"><i data-icon="panel" data-size="13"></i></button>
   </div>
   <div id="chips" hidden></div>
   <div id="main">

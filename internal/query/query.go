@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -23,8 +24,11 @@ import (
 // Query selects a page of rows.
 type Query struct {
 	// Search keeps rows where any cell contains the text. ASCII letters
-	// match regardless of case; other characters must match exactly.
+	// match regardless of case; other characters must match exactly. With
+	// Regex, Search is a regular expression (RE2, case-sensitive unless it
+	// starts with (?i)) that any cell must match.
 	Search  string   `json:"search,omitempty"`
+	Regex   bool     `json:"regex,omitempty"`
 	Filters []Filter `json:"filters,omitempty"`
 	// Sorts are the sort keys, compared in order; at most MaxSortKeys.
 	Sorts []Sort `json:"sorts,omitempty"`
@@ -62,6 +66,7 @@ const (
 	// surrounding spaces; invalid text in a boolean column must equal Value
 	// exactly, like any other text.
 	OpEquals  Op = "equals"
+	OpRegex   Op = "regex"   // any column: the raw text matches Value, a regular expression (RE2)
 	OpRange   Op = "range"   // integer, number, date and datetime columns
 	OpNull    Op = "null"    // the cell is missing
 	OpNotNull Op = "notnull" // the cell is not missing (a value, or invalid)
@@ -182,6 +187,34 @@ func (e *Engine) Run(q Query) (*Result, error) {
 	return res, nil
 }
 
+// Check reports what is wrong with a query, without running it: an unknown
+// column, an operation its type does not support, a bound or a regular
+// expression that does not parse, too many sort keys.
+func (e *Engine) Check(q Query) error {
+	if _, err := e.Columns(q.Columns); err != nil {
+		return err
+	}
+	if q.Search != "" && q.Regex {
+		if _, err := regexp.Compile(q.Search); err != nil {
+			return badQuery("search: %v", err)
+		}
+	}
+	for _, f := range q.Filters {
+		if _, err := e.compile(f); err != nil {
+			return err
+		}
+	}
+	if len(q.Sorts) > MaxSortKeys {
+		return badQuery("%d sort keys; at most %d", len(q.Sorts), MaxSortKeys)
+	}
+	for _, k := range q.Sorts {
+		if _, ok := e.index[k.Column]; !ok {
+			return badQuery("unknown sort column %q", k.Column)
+		}
+	}
+	return nil
+}
+
 // Rows returns the rows q matches, in its order (paging aside), and the
 // file positions of its columns. The rows are shared with the cache and
 // must not be changed.
@@ -221,6 +254,9 @@ func (e *Engine) Columns(names []string) ([]int, error) {
 	}
 	return cols, nil
 }
+
+// Cut shortens s to at most n bytes without splitting a character.
+func Cut(s string, n int) string { return cut(s, n) }
 
 // cut shortens s to at most n bytes without splitting a character.
 func cut(s string, n int) string {
@@ -317,14 +353,15 @@ func (e *Engine) Aggregate(q Query, r Range) (*Aggregate, error) {
 	return out, nil
 }
 
-// key identifies what a query's rows depend on: the search, the filters and
-// the sort keys.
+// key identifies what a query's rows depend on: the search (and whether it
+// is a regular expression), the filters and the sort keys.
 func (e *Engine) key(q Query) string {
 	b, _ := json.Marshal(struct {
 		S string
+		R bool
 		F []Filter
 		O []Sort
-	}{q.Search, q.Filters, q.Sorts})
+	}{q.Search, q.Regex, q.Filters, q.Sorts})
 	return string(b)
 }
 
@@ -366,7 +403,21 @@ func (e *Engine) compute(q Query) ([]int32, error) {
 		}
 		preds = append(preds, p)
 	}
-	if q.Search != "" {
+	if q.Search != "" && q.Regex {
+		re, err := regexp.Compile(q.Search)
+		if err != nil {
+			return nil, badQuery("search: %v", err)
+		}
+		cols := e.t.Columns
+		preds = append(preds, func(r int) bool {
+			for _, c := range cols {
+				if re.MatchString(c.Raw[r]) {
+					return true
+				}
+			}
+			return false
+		})
+	} else if q.Search != "" {
 		needle := lowerASCII(q.Search)
 		cols := e.t.Columns
 		preds = append(preds, func(r int) bool {
@@ -444,6 +495,12 @@ func (e *Engine) compile(f Filter) (func(int) bool, error) {
 		return func(r int) bool { return !c.IsMissing(r) }, nil
 	case OpInvalid:
 		return c.IsInvalid, nil
+	case OpRegex:
+		re, err := regexp.Compile(f.Value)
+		if err != nil {
+			return nil, badQuery("filter on %q: %v", f.Column, err)
+		}
+		return func(r int) bool { return re.MatchString(c.Raw[r]) }, nil
 	case OpContains:
 		needle := lowerASCII(f.Value)
 		return func(r int) bool { return containsFold(c.Raw[r], needle) }, nil

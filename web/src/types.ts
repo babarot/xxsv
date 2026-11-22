@@ -33,7 +33,7 @@ export interface Stats {
   top?: { value: string; count: number }[];
 }
 
-export interface Filter { column: string; op: "contains" | "equals" | "range" | "null" | "notnull" | "invalid"; value?: string; min?: string; max?: string }
+export interface Filter { column: string; op: "contains" | "regex" | "equals" | "range" | "null" | "notnull" | "invalid"; value?: string; min?: string; max?: string }
 export interface Sort { column: string; desc?: boolean }
 
 export interface RowsResponse {
@@ -44,10 +44,11 @@ export interface RowsResponse {
 export interface Aggregate { generation: number; count: number; numericCount: number; sum?: number; avg?: number; min?: number; max?: number }
 
 // ViewState is what the URL hash keeps: the query and the scroll position
-// (the first row shown, in the filtered, sorted order). sorts are the sort
+// (the first row shown, in the filtered, sorted order). regex reads the
+// search as a regular expression. sorts are the sort
 // keys, compared in order; columns are the columns shown and their order by
 // name, or null for every column in file order.
-export interface ViewState { search: string; filters: Filter[]; sorts: Sort[]; columns: string[] | null; top: number }
+export interface ViewState { search: string; regex: boolean; filters: Filter[]; sorts: Sort[]; columns: string[] | null; top: number }
 
 // Pos is a display position: a row in the filtered, sorted order, and a column.
 export interface Pos { r: number; c: number }

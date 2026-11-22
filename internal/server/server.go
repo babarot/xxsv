@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -183,7 +184,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/stats", s.handleStats)
 	mux.HandleFunc("POST /api/rows", s.handleRows)
 	mux.HandleFunc("GET /api/cell", s.handleCell)
+	mux.HandleFunc("GET /api/row", s.handleRow)
 	mux.HandleFunc("POST /api/values", s.handleValues)
+	mux.HandleFunc("POST /api/check", s.handleCheck)
 	mux.HandleFunc("POST /api/export", s.handleExportStart)
 	mux.HandleFunc("GET /api/export/{token}", s.handleExportDownload)
 	mux.HandleFunc("POST /api/aggregate", s.handleAggregate)
@@ -362,6 +365,7 @@ func (s *Server) handleRows(w http.ResponseWriter, r *http.Request) {
 // filters and sort keys as /api/rows, and the range of cells in that order.
 type AggregateRequest struct {
 	Search  string         `json:"search,omitempty"`
+	Regex   bool           `json:"regex,omitempty"`
 	Filters []query.Filter `json:"filters,omitempty"`
 	Sorts   []query.Sort   `json:"sorts,omitempty"`
 	Columns []string       `json:"columns,omitempty"`
@@ -377,7 +381,7 @@ func (s *Server) handleAggregate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	snap := s.cur.Load()
-	agg, err := snap.engine.Aggregate(query.Query{Search: req.Search, Filters: req.Filters, Sorts: req.Sorts, Columns: req.Columns}, req.Range)
+	agg, err := snap.engine.Aggregate(query.Query{Search: req.Search, Regex: req.Regex, Filters: req.Filters, Sorts: req.Sorts, Columns: req.Columns}, req.Range)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, query.ErrBadQuery) {
@@ -394,6 +398,27 @@ func (s *Server) handleAggregate(w http.ResponseWriter, r *http.Request) {
 
 // handleCell returns one cell in full. Row numbers change from one load to
 // the next, so the request names the generation it saw the row in.
+// handleCheck says what is wrong with a query without running it, as
+// {"error": "..."}, or {"error": ""} for a good one. The page checks a
+// regular expression before the table takes it; a 400 would also show as an
+// error in the browser's console.
+func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {
+	var q query.Query
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&q); err != nil {
+		writeError(w, http.StatusBadRequest, "bad request body: "+err.Error())
+		return
+	}
+	msg := ""
+	if err := s.cur.Load().engine.Check(q); err != nil {
+		msg = strings.TrimPrefix(err.Error(), query.ErrBadQuery.Error()+": ")
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Error string `json:"error"`
+	}{msg})
+}
+
 // ValuesResponse is the body of POST /api/values.
 type ValuesResponse struct {
 	Generation uint64 `json:"generation"`
@@ -446,6 +471,51 @@ func (s *Server) handleCell(w http.ResponseWriter, r *http.Request) {
 		Value      string `json:"value"`
 		Null       bool   `json:"null"`
 	}{snap.gen, c.Raw[row], c.IsMissing(row)})
+}
+
+// rowCellBytes cuts each value of /api/row; the page fetches the whole of a
+// longer one with /api/cell.
+const rowCellBytes = 64 << 10
+
+// RowCell is one value of a row in /api/row.
+type RowCell struct {
+	Value string `json:"value"`
+	Null  bool   `json:"null,omitempty"`
+	Cut   bool   `json:"cut,omitempty"`
+}
+
+// handleRow returns every value of one row, in file order, each cut to
+// rowCellBytes.
+func (s *Server) handleRow(w http.ResponseWriter, r *http.Request) {
+	snap := s.cur.Load()
+	qs := r.URL.Query()
+	gen, err1 := strconv.ParseUint(qs.Get("gen"), 10, 64)
+	row, err2 := strconv.Atoi(qs.Get("row"))
+	if err := errors.Join(err1, err2); err != nil {
+		writeError(w, http.StatusBadRequest, "gen and row must be numbers")
+		return
+	}
+	if gen != snap.gen {
+		writeError(w, http.StatusConflict, fmt.Sprintf("generation %d is gone; the file was reloaded (now %d)", gen, snap.gen))
+		return
+	}
+	t := snap.table
+	if row < 0 || row >= t.Rows {
+		writeError(w, http.StatusNotFound, "no such row")
+		return
+	}
+	cells := make([]RowCell, len(t.Columns))
+	for i, c := range t.Columns {
+		v := c.Raw[row]
+		cells[i] = RowCell{Value: v, Null: c.IsMissing(row)}
+		if len(v) > rowCellBytes {
+			cells[i].Value, cells[i].Cut = query.Cut(v, rowCellBytes), true
+		}
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Generation uint64    `json:"generation"`
+		Cells      []RowCell `json:"cells"`
+	}{snap.gen, cells})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

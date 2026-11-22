@@ -54,6 +54,22 @@ func TestSearch(t *testing.T) {
 	eq(t, "no match", ids(t, e, Query{Search: "zzz"}), []int{})
 }
 
+func TestRegex(t *testing.T) {
+	e := engine(t, sample)
+	eq(t, "search: any cell matches", ids(t, e, Query{Search: `^[a-c]`, Regex: true}), []int{0, 1})
+	eq(t, "search is case-sensitive", ids(t, e, Query{Search: `^Carol$`, Regex: true}), []int{2})
+	eq(t, "(?i) ignores case", ids(t, e, Query{Search: `(?i)^carol$`, Regex: true}), []int{2})
+	eq(t, "the same text without Regex is plain", ids(t, e, Query{Search: `^[a-c]`}), []int{})
+	eq(t, "filter on one column", ids(t, e, Query{Filters: []Filter{{Column: "note", Op: OpRegex, Value: `l+o\b`}}}), []int{0, 2})
+	// The cache tells a regular expression from the same plain text.
+	eq(t, "regex W is case-sensitive", ids(t, e, Query{Search: "W", Regex: true}), []int{0})
+	eq(t, "plain W after it is not", ids(t, e, Query{Search: "W"}), []int{0, 3})
+	_, err := e.Run(Query{Search: "a(", Regex: true})
+	if err == nil || !strings.Contains(err.Error(), "missing closing )") {
+		t.Errorf("bad regex: %v", err)
+	}
+}
+
 func TestFilters(t *testing.T) {
 	e := engine(t, sample)
 	tests := []struct {
@@ -84,16 +100,26 @@ func TestFilters(t *testing.T) {
 
 func TestBadQueries(t *testing.T) {
 	e := engine(t, sample)
+	if err := e.Check(Query{Search: "a.c", Regex: true, Filters: []Filter{{Column: "score", Op: OpRange, Min: "1"}}, Sorts: []Sort{{Column: "id"}}, Columns: []string{"name"}}); err != nil {
+		t.Errorf("good query: %v", err)
+	}
 	for _, q := range []Query{
 		{Filters: []Filter{{Column: "nope", Op: OpNull}}},
 		{Filters: []Filter{{Column: "name", Op: OpRange, Min: "a"}}},
 		{Filters: []Filter{{Column: "score", Op: OpRange, Min: "x"}}},
-		{Filters: []Filter{{Column: "name", Op: "regex"}}},
+		{Filters: []Filter{{Column: "name", Op: OpRegex, Value: "("}}},
+		{Search: "a(", Regex: true},
+		{Filters: []Filter{{Column: "name", Op: "glob"}}},
 		{Sorts: []Sort{{Column: "nope"}}},
 		{Offset: -1},
 	} {
 		if _, err := e.Run(q); !errors.Is(err, ErrBadQuery) {
 			t.Errorf("%+v: got %v, want ErrBadQuery", q, err)
+		}
+		if q.Offset >= 0 {
+			if err := e.Check(q); !errors.Is(err, ErrBadQuery) {
+				t.Errorf("check %+v: got %v, want ErrBadQuery", q, err)
+			}
 		}
 	}
 }

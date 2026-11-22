@@ -1,8 +1,10 @@
 // Takes docs/screenshot-light.png and docs/screenshot-dark.png for the
 // README: builds xxsv, opens a generated table of orders (no real data),
-// selects a range so the status bar shows its sum, opens a column's
-// distribution, and captures the page in the light and the dark theme
-// (the page follows the browser's color scheme by default).
+// hides two columns, sorts it by two others, lists a column's values in the
+// side panel,
+// selects a range so the status bar shows its sum, and captures the page in
+// the light and the dark theme (the page follows the browser's color scheme
+// by default).
 //
 //	cd web && npm run build && npm run screenshot
 //
@@ -59,14 +61,21 @@ try {
 
 async function shoot(scheme: "light" | "dark") {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 2, colorScheme: scheme });
-  await page.goto(url);
+  // Two columns hidden, so the rest fits beside the side panel.
+  const view = { search: "", regex: false, filters: [], sorts: [], columns: ["order_id", "customer", "country", "product", "qty", "amount", "status"], top: 0 };
+  await page.goto(url + "#" + encodeURIComponent(JSON.stringify(view)));
   await page.locator("#rows .row:not(.loading)").first().waitFor();
   const cell = (r: number, c: number) => page.locator(`#rows [data-r="${r}"][data-c="${c}"]`);
-  await cell(2, 7).click();
-  await cell(9, 7).click({ modifiers: ["Shift"] });
-  await page.locator("#agg b").first().waitFor();
+  await page.locator('[data-sort="country"]').click();
+  await page.locator('[data-sort="amount"]').click({ modifiers: ["Shift"] });
+  await page.locator('[data-sort="amount"]').click({ modifiers: ["Shift"] }); // descending
+  await page.locator('[data-sort="amount"] .prio').waitFor();
   await page.locator('[data-prof="3"]').click();
-  await page.locator("#colpop").waitFor();
+  await page.locator("#colpop").getByRole("button", { name: "All values" }).click();
+  await page.locator("#pinpanel .vals-item").first().waitFor();
+  await cell(2, 5).click();
+  await cell(9, 5).click({ modifiers: ["Shift"] });
+  await page.locator("#agg b").first().waitFor();
   await page.mouse.move(1200, 700); // no hover marks
   const out = join(root, "docs", `screenshot-${scheme}.png`);
   await page.screenshot({ path: out });

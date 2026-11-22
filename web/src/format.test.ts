@@ -66,9 +66,9 @@ test("changeSummary says what a reload changed", () => {
 
 test("viewSentence describes the view", () => {
   const meta = { rows: 1000, columns: [{ name: "q", type: "integer" }, { name: "r", type: "string" }] } as Meta;
-  assert.equal(viewSentence(meta, 1000, { search: "", filters: [], sorts: [], columns: null, top: 0 }), "1,000 of 1,000 rows.");
+  assert.equal(viewSentence(meta, 1000, { search: "", regex: false, filters: [], sorts: [], columns: null, top: 0 }), "1,000 of 1,000 rows.");
   assert.equal(
-    viewSentence(meta, 12, { search: "ab", filters: [{ column: "q", op: "range", min: "1", max: "2" }], sorts: [{ column: "q", desc: true }, { column: "r" }], columns: ["q"], top: 0 }),
+    viewSentence(meta, 12, { search: "ab", regex: false, filters: [{ column: "q", op: "range", min: "1", max: "2" }], sorts: [{ column: "q", desc: true }, { column: "r" }], columns: ["q"], top: 0 }),
     "12 of 1,000 rows, matching “ab”, where q 1 – 2, 1 of 2 columns hidden, sorted by q descending, then r ascending.",
   );
 });

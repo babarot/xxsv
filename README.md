@@ -6,13 +6,13 @@ xxsv shows a CSV, TSV or JSONL file as a table in your browser and keeps it up t
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/screenshot-light.png">
-    <img alt="xxsv showing a table of orders, with a range selected and the distribution of a column open" src="docs/screenshot-light.png">
+    <img alt="xxsv showing a table of orders sorted by two columns, with a range selected and a column's values listed in the side panel" src="docs/screenshot-light.png">
   </picture>
 </p>
 
 Run `xxsv data.csv` and a page opens with the table. Save the file in your editor, and the page reloads it in place: the sort, the filters, the search and the scroll position stay, and the cells that changed glow for a moment.
 
-The name, xxsv (ex-ex-es-vee), comes from [xsv](https://github.com/BurntSushi/xsv), the CSV toolkit. The second x stands for "any": any separator, and line formats that are not separated values at all, such as JSONL. It is a separate tool, not a successor to xsv: xsv transforms files on the command line, and xxsv shows one in the browser while it changes.
+The name, xxsv (ex-ex-es-vee), stands for eXtended [xsv](https://github.com/BurntSushi/xsv), the CSV toolkit. What xsv's commands do on the command line, selecting columns, sorting, searching, counting values, slicing, xxsv does in the browser, on any separator and on JSONL too, while the file changes. It is a separate tool, not a successor to xsv.
 
 ## Features
 
@@ -20,6 +20,11 @@ The name, xxsv (ex-ex-es-vee), comes from [xsv](https://github.com/BurntSushi/xs
 - Large files. The server holds the table and the page fetches only the rows in view, so a file of a million rows scrolls, sorts and filters without loading the browser.
 - Spreadsheet-like. Select cells, ranges, whole columns or rows with the mouse or the arrow keys, and see the count, sum, average, minimum and maximum of the range.
 - A distribution for every column. A histogram or the top values sit under each column name; click one for statistics and filters.
+- Columns. Hide columns and drag them into another order, and sort by several columns at once.
+- Search and filter with plain text or regular expressions (RE2), across all cells or in one column.
+- Values. List every value of a column with its count, most frequent first, and filter by one with a click.
+- Rows. Show the selected row with every column on its own line, the hidden ones too.
+- Export what you see, every matching row in the shown columns and order, as CSV, TSV or JSONL.
 - Types. Each column is read as integer, number, date, datetime, boolean, string or JSON, so numbers sort as numbers and dates filter by range. Missing cells and cells that do not fit the column's type are told apart and can be filtered.
 - Long values. JSON and long text open in a popover next to the cell, pretty-printed, or in a side panel.
 - One binary, local only. The UI is built in, and the page talks to nothing but xxsv on 127.0.0.1.
@@ -71,11 +76,16 @@ In the page:
 | Key | Action |
 |---|---|
 | Arrow keys | Move the selection; with Shift, extend the range |
+| Click a column name | Sort by that column: ascending, descending, off |
+| Shift-click a column name | Add it as the next sort key, or turn its key around or off |
+| Enter | Show the selected row in the side panel |
 | Space, double-click | Show the full value of a long cell |
-| `/` | Search all cells |
-| Esc | Close a popover, leave the search |
+| `/` | Search all cells (`.*` beside the box for a regular expression) |
+| Esc | Close a popover or a menu, leave the search |
 
-The view (search, filters, sort, scroll position) is kept in the URL, so a reload of the page or a copied link opens the same view. Settings (theme, accent, number colors, digit grouping, histogram scale) are saved in the browser.
+A column's distribution, under its name, opens its statistics and filters, and from there the list of its values or hiding it. The Columns button lists every column to show, hide and move; Export writes the view to a file.
+
+The view (search, filters, sort keys, shown columns, scroll position) is kept in the URL, so a reload of the page or a copied link opens the same view. Settings (theme, accent, number colors, digit grouping, histogram scale) are saved in the browser.
 
 ## How cells are read
 
