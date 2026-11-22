@@ -76,6 +76,8 @@ type Server struct {
 
 	// seed hashes the rows of every generation, so their hashes compare.
 	seed maphash.Seed
+
+	exports exports
 }
 
 // New loads the file once and returns a Server for it. The first load must
@@ -181,6 +183,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/stats", s.handleStats)
 	mux.HandleFunc("POST /api/rows", s.handleRows)
 	mux.HandleFunc("GET /api/cell", s.handleCell)
+	mux.HandleFunc("POST /api/export", s.handleExportStart)
+	mux.HandleFunc("GET /api/export/{token}", s.handleExportDownload)
 	mux.HandleFunc("POST /api/aggregate", s.handleAggregate)
 	mux.HandleFunc("GET /api/events", s.handleEvents)
 	files := s.opts.UI

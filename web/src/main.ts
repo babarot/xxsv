@@ -12,6 +12,7 @@ import { hydrateIcons } from "./icons.ts";
 import { wholeColumn, wholeRow } from "./selection.ts";
 import { S, cycleSort, moveBy, refresh, resetRows, select, toggleColPop, toggleMissing } from "./app.ts";
 import { columnsMenuOpen, renderColumnsMenu, toggleColumnsMenu } from "./columns-menu.ts";
+import { exportMenuOpen, renderExportMenu, toggleExportMenu } from "./export-menu.ts";
 import { filterBySelected, renderSelectionInfo } from "./cell-popover.ts";
 import { $, copyText } from "./dom.ts";
 import { grid, isLong, scheduleRender } from "./grid.ts";
@@ -102,6 +103,7 @@ function setup() {
     if (e.key === "Escape") {
       if (!$("settings").hidden) toggleSettings(false);
       else if (columnsMenuOpen()) toggleColumnsMenu(false);
+      else if (exportMenuOpen()) toggleExportMenu(false);
       else if (typing) (t as HTMLElement).blur();
       else if (S.colPop !== null) toggleColPop(S.colPop);
       else if (S.expanded) { S.expanded = false; renderSelectionInfo(); }
@@ -127,16 +129,21 @@ function setup() {
 
   $("fbar-filter").addEventListener("click", filterBySelected);
   $("cols-btn").addEventListener("click", () => toggleColumnsMenu());
+  $("export-btn").addEventListener("click", () => toggleExportMenu());
   // The "N hidden" link next to the counts opens the column list too.
   $("counts").addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("#hidden-link")) toggleColumnsMenu(true);
   });
-  // A press outside the column list closes it.
+  // A press outside a menu closes it.
   document.addEventListener("mousedown", (e) => {
     const t = e.target as HTMLElement;
     if (columnsMenuOpen() && !t.closest("#colmenu, #cols-btn, #hidden-link")) toggleColumnsMenu(false);
+    if (exportMenuOpen() && !t.closest("#expmenu, #export-btn")) toggleExportMenu(false);
   });
-  window.addEventListener("resize", renderColumnsMenu);
+  window.addEventListener("resize", () => {
+    renderColumnsMenu();
+    renderExportMenu();
+  });
   $("settings-btn").addEventListener("click", () => toggleSettings());
   $("settings-close").addEventListener("click", () => toggleSettings(false));
   $("settings").addEventListener("click", (e) => { if (e.target === e.currentTarget) toggleSettings(false); });

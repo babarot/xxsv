@@ -161,6 +161,9 @@ button { font: inherit; color: inherit; }
 .cm-grip { width: 13px; flex: none; color: var(--text-faint); cursor: grab; display: inline-flex; }
 .cm-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #colmenu > .btn-ghost { align-self: flex-start; height: 26px; }
+#expmenu { position: fixed; z-index: 20; width: 260px; display: flex; flex-direction: column; gap: 8px; }
+.exp-formats { display: flex; gap: 6px; }
+.exp-formats .btn-ghost { flex: 1; justify-content: center; color: var(--text); }
 .vb-head { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
 .vb-head .typ { text-transform: none; letter-spacing: 0; }
 .vb-head .btn-icon { margin-left: auto; }

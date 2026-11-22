@@ -178,6 +178,19 @@ func (e *Engine) Run(q Query) (*Result, error) {
 	return res, nil
 }
 
+// Rows returns the rows q matches, in its order (paging aside), and the
+// file positions of its columns. The rows are shared with the cache and
+// must not be changed.
+func (e *Engine) Rows(q Query) (rows []int32, cols []int, err error) {
+	if cols, err = e.Columns(q.Columns); err != nil {
+		return nil, nil, err
+	}
+	if rows, err = e.match(q); err != nil {
+		return nil, nil, err
+	}
+	return rows, cols, nil
+}
+
 // Columns returns the file positions of the named columns, in order: every
 // column for none. A name the table lacks, or one given twice, is a bad
 // query.
