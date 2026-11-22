@@ -3,6 +3,7 @@ package table
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -21,6 +22,61 @@ func TestStatsNumeric(t *testing.T) {
 	eq(t, "discrete", s.Histogram.Discrete, true)
 	eq(t, "sample std", fmt.Sprintf("%.4f", *s.Std), "1.2910")
 	eq(t, "histogram total", sum(s.Histogram.Counts), 4)
+}
+
+func TestStatsTopLimit(t *testing.T) {
+	// 20 values seen once, then "late" three times: "late" comes first,
+	// and the ties that follow keep the order of first appearance.
+	var b strings.Builder
+	b.WriteString("c\n")
+	for i := range 20 {
+		fmt.Fprintf(&b, "v%02d\n", i)
+	}
+	b.WriteString("late\nlate\nlate\n")
+	s := load(t, CSV, b.String(), Options{}).Columns[0].Stats()
+	want := []TopValue{{"late", 3}}
+	for i := range topLimit - 1 {
+		want = append(want, TopValue{fmt.Sprintf("v%02d", i), 1})
+	}
+	eq(t, "top", s.Top, want)
+}
+
+func TestStatsTopSharded(t *testing.T) {
+	// Enough rows for several shards: the counts and the order of ties
+	// must be those of a single pass in row order.
+	rows := 4 * shardRows
+	var b strings.Builder
+	b.WriteString("c\n")
+	counts := map[string]int{}
+	var order []string
+	for i := range rows {
+		v := fmt.Sprintf("v%d", (i*7919)%(rows/3))
+		if i%11 == 0 {
+			v = fmt.Sprintf("hot%d", i%5)
+		}
+		if i%97 == 0 {
+			v = ""
+		}
+		if v == "" {
+			b.WriteString(`""` + "\n") // a blank line would not be a row
+			continue
+		}
+		b.WriteString(v + "\n")
+		if counts[v] == 0 {
+			order = append(order, v)
+		}
+		counts[v]++
+	}
+	slices.SortStableFunc(order, func(a, b string) int { return counts[b] - counts[a] })
+	var want []TopValue
+	for _, v := range order[:topLimit] {
+		want = append(want, TopValue{v, counts[v]})
+	}
+	s := load(t, CSV, b.String(), Options{}).Columns[0].Stats()
+	eq(t, "top", s.Top, want)
+	eq(t, "unique", s.Unique, min(len(counts), uniqueLimit+1))
+	eq(t, "approx", s.UniqueApprox, len(counts) > uniqueLimit)
+	eq(t, "nulls", s.Nulls, (rows+96)/97)
 }
 
 func TestStatsExactIntegerBounds(t *testing.T) {

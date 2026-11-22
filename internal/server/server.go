@@ -40,10 +40,14 @@ type Options struct {
 
 // snapshot is one load of the file. It never changes once published.
 type snapshot struct {
-	gen      uint64
-	table    *table.Table
-	engine   *query.Engine
-	stats    []table.Stats
+	gen    uint64
+	table  *table.Table
+	engine *query.Engine
+	// stats returns the column statistics. They are computed in the
+	// background from the moment the snapshot is made, so that the server
+	// starts listening (and the browser starts loading the page) without
+	// waiting for them; /api/stats waits for them instead.
+	stats    func() []table.Stats
 	loadedAt time.Time
 	// file is the file's state just before it was read, so a change made
 	// while reading is seen as a change by the watcher.
@@ -104,7 +108,7 @@ func (s *Server) reload() error {
 		gen:      1,
 		table:    t,
 		engine:   query.New(t),
-		stats:    t.Stats(),
+		stats:    background(t.Stats),
 		loadedAt: time.Now(),
 		file:     st,
 	}
@@ -120,6 +124,21 @@ func (s *Server) reload() error {
 	s.loadErr = ""
 	s.errMu.Unlock()
 	return nil
+}
+
+// background starts f in a goroutine and returns a function that waits for
+// its result.
+func background[T any](f func() T) func() T {
+	done := make(chan struct{})
+	var v T
+	go func() {
+		defer close(done)
+		v = f()
+	}()
+	return func() T {
+		<-done
+		return v
+	}
 }
 
 func (s *Server) lastError() string {
@@ -266,7 +285,7 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, struct {
 		Generation uint64        `json:"generation"`
 		Stats      []table.Stats `json:"stats"`
-	}{snap.gen, snap.stats})
+	}{snap.gen, snap.stats()})
 }
 
 // RowsResponse is the body of POST /api/rows.

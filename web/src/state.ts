@@ -16,6 +16,9 @@ export interface State {
   meta: Meta | null;
   stats: Stats[];
   widths: number[];
+  // widthsPending is set when the columns changed, until the first rows
+  // come and the widths are fitted to them (fitWidths).
+  widthsPending: boolean;
   rownumW: number; // fits the largest row number
   view: ViewState;
   total: number; // rows that match the query
@@ -43,7 +46,7 @@ export interface Flash { at: number | null; pending: boolean; seen: boolean }
 
 export function newState(view: ViewState = emptyView()): State {
   return {
-    meta: null, stats: [], widths: [], rownumW: 52, view, total: 0, epoch: 0,
+    meta: null, stats: [], widths: [], widthsPending: false, rownumW: 52, view, total: 0, epoch: 0,
     cur: { r: 0, c: 0 }, anchor: { r: 0, c: 0 },
     expanded: false, pinned: false, colPop: null, fullValue: null,
     histScale: "linear", numGroup: true, flash: { at: null, pending: false, seen: false },
@@ -63,28 +66,50 @@ export function newQuery(s: State) {
   s.fullValue = null;
 }
 
-// applyMeta takes a new meta and stats and starts the rows over. When the
-// generation changed, the glow of the last reload stops and the next waits
-// for the new rows; filters and the sort on columns that are gone are
-// dropped; when the columns changed, the widths are estimated again and the
-// distribution popover closes. It reports whether the columns changed.
-export function applyMeta(s: State, m: Meta, stats: Stats[]): { columnsChanged: boolean } {
+// applyMeta takes a new meta and starts the rows over. When the generation
+// changed, the glow of the last reload stops and the next waits for the new
+// rows; filters and the sort on columns that are gone are dropped; when the
+// columns changed, the stats are dropped, the widths wait for the first
+// rows (fitWidths) and the distribution popover closes. The stats of the
+// same columns stay until the new ones come (applyStats). It reports
+// whether the columns changed.
+export function applyMeta(s: State, m: Meta): { columnsChanged: boolean } {
   const columnsChanged = s.meta === null || JSON.stringify(s.meta.columns) !== JSON.stringify(m.columns);
   if (s.meta !== null && m.generation !== s.meta.generation) {
     s.flash = { at: null, pending: true, seen: true };
   }
   s.meta = m;
-  s.stats = stats;
   const names = new Set(m.columns.map((c) => c.name));
   s.view.filters = s.view.filters.filter((f) => names.has(f.column));
   if (s.view.sort && !names.has(s.view.sort.column)) s.view.sort = null;
   if (columnsChanged) {
-    s.widths = m.columns.map((c, i) => estimateWidth(c, stats[i]));
+    s.stats = [];
+    s.widths = m.columns.map((c) => estimateWidth(c));
+    s.widthsPending = true;
     s.colPop = null;
   }
   s.rownumW = rownumWidth(m.rows);
   newQuery(s);
   return { columnsChanged };
+}
+
+// applyStats takes the stats of a generation, which come after the meta on
+// a large file. It reports whether they were taken: stats of another
+// generation than the meta's are dropped.
+export function applyStats(s: State, generation: number, stats: Stats[]): boolean {
+  if (s.meta?.generation !== generation) return false;
+  s.stats = stats;
+  return true;
+}
+
+// fitWidths fits the column widths to the first rows shown after the
+// columns changed; later rows and the stats leave them, so the table does
+// not shift under the reader. It reports whether the widths were set.
+export function fitWidths(s: State, rows: string[][]): boolean {
+  if (!s.widthsPending || !s.meta) return false;
+  s.widths = s.meta.columns.map((c, i) => estimateWidth(c, rows.map((r) => r[i] ?? "")));
+  s.widthsPending = false;
+  return true;
 }
 
 // rowsShown is called when a block of the current epoch is stored: the

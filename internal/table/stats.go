@@ -2,10 +2,13 @@ package table
 
 import (
 	"encoding/json"
+	"hash/maphash"
 	"math"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -62,13 +65,171 @@ type TopValue struct {
 	Count int    `json:"count"`
 }
 
-// Stats computes the statistics of every column.
+// Stats computes the statistics of every column, the columns in parallel.
 func (t *Table) Stats() []Stats {
 	out := make([]Stats, len(t.Columns))
+	sem := make(chan struct{}, runtime.GOMAXPROCS(0))
+	var wg sync.WaitGroup
 	for i, c := range t.Columns {
-		out[i] = c.Stats()
+		sem <- struct{}{}
+		wg.Go(func() {
+			defer func() { <-sem }()
+			out[i] = c.Stats()
+		})
 	}
+	wg.Wait()
 	return out
+}
+
+// topLimit is how many of the most frequent values Stats reports.
+const topLimit = 15
+
+// shardRows is the number of rows per goroutine that counts the values of a
+// String, Boolean or JSON column.
+const shardRows = 100_000
+
+// valueCount is a distinct value of a column, how many cells hold it and
+// the first row it is in.
+type valueCount struct {
+	value        string
+	count, first int
+}
+
+// countValues counts the cells with a value, the distinct values and the
+// most frequent ones of a String, Boolean or JSON column. A large column is
+// split by the hash of its values: goroutines first sort the rows of a
+// range each into shards, then each shard counts its own distinct values in
+// a map of its own, going through its rows in order.
+func (c *Column) countValues() (count, unique int, top []TopValue) {
+	rows := len(c.Raw)
+	n := min(runtime.GOMAXPROCS(0), max(1, rows/shardRows))
+	value := func(i int) string {
+		if c.Type == Boolean {
+			return strings.ToLower(strings.TrimSpace(c.Raw[i]))
+		}
+		return c.Raw[i]
+	}
+
+	// parts[r][k] are the rows of range r in shard k.
+	parts := make([][][]int32, n)
+	seed := maphash.MakeSeed()
+	var wg sync.WaitGroup
+	for r := range n {
+		wg.Go(func() {
+			lo, hi := rows*r/n, rows*(r+1)/n
+			p := make([][]int32, n)
+			for k := range p {
+				p[k] = make([]int32, 0, (hi-lo)/n+(hi-lo)/(4*n)+16)
+			}
+			for i := lo; i < hi; i++ {
+				if !c.HasValue(i) {
+					continue
+				}
+				k := 0
+				if n > 1 {
+					k = int(maphash.String(seed, value(i)) % uint64(n))
+				}
+				p[k] = append(p[k], int32(i))
+			}
+			parts[r] = p
+		})
+	}
+	wg.Wait()
+
+	type shard struct {
+		count, unique int
+		top           []valueCount
+	}
+	shards := make([]shard, n)
+	for k := range n {
+		wg.Go(func() {
+			hint := c.distinctHint(parts, k, value)
+			index := make(map[string]int, hint)
+			vals := make([]valueCount, 0, hint) // in the order of first appearance
+			cnt := 0
+			for r := range n {
+				for _, i := range parts[r][k] {
+					cnt++
+					v := value(int(i))
+					if j, ok := index[v]; ok {
+						vals[j].count++
+						continue
+					}
+					index[v] = len(vals)
+					vals = append(vals, valueCount{v, 1, int(i)})
+				}
+			}
+			shards[k] = shard{cnt, len(vals), topValues(vals, topLimit)}
+		})
+	}
+	wg.Wait()
+
+	var best []valueCount
+	for _, sh := range shards {
+		count += sh.count
+		unique += sh.unique
+		best = append(best, sh.top...)
+	}
+	// Most frequent first; ties keep the order of first appearance.
+	slices.SortFunc(best, func(a, b valueCount) int {
+		if a.count != b.count {
+			return b.count - a.count
+		}
+		return a.first - b.first
+	})
+	for _, v := range best[:min(topLimit, len(best))] {
+		top = append(top, TopValue{v.value, v.count})
+	}
+	return count, unique, top
+}
+
+// distinctHint guesses how many distinct values shard k holds from the
+// share of distinct values in its first rows, so that its map is made once
+// at about the right size instead of growing all the way.
+func (c *Column) distinctHint(parts [][][]int32, k int, value func(int) string) int {
+	const sample = 4096
+	total := 0
+	for _, p := range parts {
+		total += len(p[k])
+	}
+	seen := make(map[string]struct{}, sample)
+	taken := 0
+	for _, p := range parts {
+		for _, i := range p[k] {
+			if taken == sample {
+				break
+			}
+			seen[value(int(i))] = struct{}{}
+			taken++
+		}
+	}
+	if taken == 0 {
+		return 0
+	}
+	return total * len(seen) / taken
+}
+
+// topValues returns the n most frequent of vals, which are in the order of
+// first appearance; ties keep that order. It keeps only the n best while
+// it goes, as a column of millions of distinct values needs no full sort.
+func topValues(vals []valueCount, n int) []valueCount {
+	top := make([]valueCount, 0, n+1)
+	for _, v := range vals {
+		if len(top) == n && v.count <= top[n-1].count {
+			continue
+		}
+		// Insert after every value with as many or more cells, so that an
+		// earlier value wins a tie.
+		i := len(top)
+		for i > 0 && top[i-1].count < v.count {
+			i--
+		}
+		top = slices.Insert(top, i, v)
+		if len(top) > n {
+			top = top[:n]
+		}
+	}
+	return top
 }
 
 // Stats computes the column's statistics.
@@ -131,30 +292,11 @@ func (c *Column) Stats() Stats {
 		s.HistogramLog = logHistogram(vals)
 		moments(&s, vals)
 	default: // String, Boolean, JSON
-		counts := map[string]int{}
-		var firstSeen []string
-		for i := range rows {
-			if !c.HasValue(i) {
-				continue
-			}
-			s.Count++
-			v := c.Raw[i]
-			if c.Type == Boolean {
-				v = strings.ToLower(strings.TrimSpace(v))
-			}
-			if _, ok := counts[v]; !ok {
-				firstSeen = append(firstSeen, v)
-			}
-			counts[v]++
-		}
-		s.Unique, s.UniqueApprox = min(len(counts), uniqueLimit+1), len(counts) > uniqueLimit
+		var unique int
+		s.Count, unique, s.Top = c.countValues()
+		s.Unique, s.UniqueApprox = min(unique, uniqueLimit+1), unique > uniqueLimit
 		if c.Type == JSON {
-			break
-		}
-		// Most frequent first; ties keep the order of first appearance.
-		slices.SortStableFunc(firstSeen, func(a, b string) int { return counts[b] - counts[a] })
-		for _, v := range firstSeen[:min(15, len(firstSeen))] {
-			s.Top = append(s.Top, TopValue{v, counts[v]})
+			s.Top = nil
 		}
 	}
 	for i := range rows {

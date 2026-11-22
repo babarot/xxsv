@@ -5,7 +5,7 @@ import { MAX_CELL_BYTES } from "./constants.ts";
 import { readHash, writeHash } from "./hash.ts";
 import { Rows, blockOf } from "./rows.ts";
 import { moved, range } from "./selection.ts";
-import { applyMeta, newQuery, newState, rowsShown } from "./state.ts";
+import { applyMeta, applyStats, fitWidths, newQuery, newState, rowsShown } from "./state.ts";
 import type { Filter, Meta, Pos, RowsResponse, Stats } from "./types.ts";
 import { cancelAggregate, requestAggregate } from "./aggregate.ts";
 import { api, post } from "./api.ts";
@@ -39,16 +39,25 @@ export function refresh(): Promise<void> {
 export async function doRefresh() {
   setBusy(true);
   try {
-    const [m, s] = await Promise.all([api<Meta>("/api/meta"), api<{ stats: Stats[] }>("/api/stats")]);
-    applyMeta(S, m, s.stats);
-    // The distribution popover shows the new stats, or closes when its
-    // column is gone (applyMeta clears it when the columns changed).
+    // On a large file the stats come a while after the meta and the rows:
+    // show the table first and the distributions when they come.
+    const stats = api<{ generation: number; stats: Stats[] }>("/api/stats");
+    stats.catch(() => {}); // awaited below; not unhandled while the meta loads
+    const m = await api<Meta>("/api/meta");
+    applyMeta(S, m);
+    // The distribution popover closes when its column is gone (applyMeta
+    // clears it when the columns changed).
     renderColPop();
     renderTop();
     renderStatus();
     renderChips();
     restartRows();
     if (!$("settings").hidden) renderAbout();
+    const s = await stats;
+    if (applyStats(S, s.generation, s.stats)) {
+      renderHeader();
+      renderColPop();
+    }
   } finally {
     setBusy(false);
   }
@@ -87,8 +96,13 @@ export function restartRows() {
   $("peek").hidden = true;
   renderPinPanel(null);
   writeHash(S.view);
-  renderHeader();
+  // After the columns changed, the header waits for the first rows to fit
+  // the widths to (blockLoaded), so that it is drawn once.
+  if (!S.widthsPending) renderHeader();
+  const epoch = S.epoch;
   void rows.load(blockOf(S.view.top)).then(() => {
+    // No rows came (a failed request): fit the widths to the names.
+    if (epoch === S.epoch && fitWidths(S, [])) renderHeader();
     layout();
     scrollToRow(S.view.top);
     render();
@@ -98,6 +112,7 @@ export function restartRows() {
 
 // blockLoaded runs when a block of the current epoch was stored.
 export function blockLoaded(b: number, res: RowsResponse) {
+  if (fitWidths(S, res.rows)) renderHeader();
   // The first block of a reloaded file starts the glow.
   rowsShown(S, performance.now());
   if (res.total !== S.total) {

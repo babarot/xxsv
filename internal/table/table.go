@@ -100,7 +100,13 @@ func (c *Column) setNull(i int)    { c.nulls[i>>6] |= 1 << (uint(i) & 63) }
 func (c *Column) setInvalid(i int) { c.setNull(i); c.invalid[i>>6] |= 1 << (uint(i) & 63) }
 
 func newColumn(name string, rows int) *Column {
-	return &Column{Name: name, Raw: make([]string, 0, rows)}
+	words := (rows + 63) / 64
+	return &Column{
+		Name:    name,
+		Raw:     make([]string, 0, rows),
+		nulls:   make([]uint64, 0, words),
+		invalid: make([]uint64, 0, words),
+	}
 }
 
 // Table is a loaded file.

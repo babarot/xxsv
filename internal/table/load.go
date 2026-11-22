@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -46,7 +47,11 @@ func LoadFile(path string, opts Options) (*Table, error) {
 	if format == "" {
 		format = CSV
 	}
-	return LoadDelimited(br, format, opts)
+	var size int64
+	if fi, err := f.Stat(); err == nil {
+		size = fi.Size()
+	}
+	return loadDelimited(br, format, opts, size)
 }
 
 func formatFromExt(path string) Format {
@@ -73,6 +78,14 @@ func looksLikeJSONL(br *bufio.Reader) bool {
 // LoadDelimited reads CSV or TSV from r. format is CSV or TSV; the
 // delimiter is detected unless opts.Delimiter is set or format is TSV.
 func LoadDelimited(r io.Reader, format Format, opts Options) (*Table, error) {
+	return loadDelimited(r, format, opts, 0)
+}
+
+// loadDelimited is LoadDelimited for an input of size bytes, or of an
+// unknown size when size is 0. The size and the length of the first rows
+// give an estimate of the number of rows, so the columns are allocated
+// once instead of growing (and being copied) all the way.
+func loadDelimited(r io.Reader, format Format, opts Options, size int64) (*Table, error) {
 	br, ok := r.(*bufio.Reader)
 	if !ok {
 		br = bufio.NewReaderSize(r, 1<<20)
@@ -99,6 +112,10 @@ func LoadDelimited(r io.Reader, format Format, opts Options) (*Table, error) {
 	cr.Comma = delim
 	cr.LazyQuotes = true
 	cr.FieldsPerRecord = -1
+	// Fields are substrings of a string allocated per record, so they stay
+	// valid when the slice holding them is reused. Records kept past the
+	// next read (the header and the type sample) are cloned.
+	cr.ReuseRecord = true
 	read := func() ([]string, error) {
 		rec, err := cr.Read()
 		if pe, ok := errors.AsType[*csv.ParseError](err); ok {
@@ -118,6 +135,7 @@ func LoadDelimited(r io.Reader, format Format, opts Options) (*Table, error) {
 	var sample [][]string
 	t.HeaderGenerated = opts.Header == HeaderNo || (opts.Header == HeaderAuto && hasBareNumber(first))
 	var names []string
+	first = slices.Clone(first)
 	if t.HeaderGenerated {
 		names = make([]string, len(first))
 		sample = append(sample, first)
@@ -134,7 +152,11 @@ func LoadDelimited(r io.Reader, format Format, opts Options) (*Table, error) {
 		if err != nil {
 			return nil, err
 		}
-		sample = append(sample, rec)
+		sample = append(sample, slices.Clone(rec))
+	}
+	rows := len(sample)
+	if off := cr.InputOffset(); size > off && off > 0 && rows > 0 {
+		rows = int(float64(rows) * float64(size) / float64(off) * 1.05)
 	}
 
 	t.Columns = make([]*Column, len(names))
@@ -145,9 +167,9 @@ func LoadDelimited(r io.Reader, format Format, opts Options) (*Table, error) {
 				cnt.addText(rec[ci])
 			}
 		}
-		c := newColumn(name, len(sample))
+		c := newColumn(name, rows)
 		c.Type = cnt.typ()
-		c.prepare(len(sample))
+		c.prepare(rows)
 		t.Columns[ci] = c
 	}
 
