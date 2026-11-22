@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" data-theme="mono">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>xxsv</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script src="theme.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <svg class="logo" viewBox="1.5 8.5 21 9" role="img" aria-label="xxsv">
+      <title>xxsv</title>
+      <g fill="currentColor"><rect x="2" y="9" width="5" height="6" rx="1.2"/><rect x="9.5" y="9" width="5" height="6" rx="1.2"/><rect x="17" y="9" width="5" height="6" rx="1.2"/></g>
+      <path d="M8.2 15.2l-.6 1.6M15.7 15.2l-.6 1.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    <div class="sep"></div>
+    <span id="file" class="file"></span>
+    <span id="format" class="badge"></span>
+    <span id="counts" class="dim"></span>
+    <div class="spacer"></div>
+    <label class="search">
+      <i data-icon="search" data-size="14"></i>
+      <input id="search" type="search" placeholder="Search all cells" autocomplete="off" spellcheck="false">
+      <kbd>/</kbd>
+    </label>
+    <button id="settings-btn" class="btn-ghost btn-square" title="Settings" aria-label="Settings"><i data-icon="settings"></i></button>
+  </header>
+  <div id="fbar">
+    <div id="namebox"></div>
+    <div class="fx">fx</div>
+    <div id="fval"></div>
+    <button id="fbar-filter" class="btn-icon" title="Filter by this value" aria-label="Filter by this value" disabled><i data-icon="filter" data-size="13"></i></button>
+  </div>
+  <div id="chips" hidden></div>
+  <div id="main">
+    <section id="center">
+      <div id="grid" tabindex="0">
+        <div id="sizer"></div>
+        <div id="header"></div>
+        <div id="rows"></div>
+      </div>
+      <div id="peek" class="pop" hidden></div>
+      <div id="colpop" class="pop" hidden></div>
+    </section>
+    <aside id="pinpanel" hidden></aside>
+  </div>
+  <footer id="status">
+    <span id="watch"><i class="dot"></i><span id="watch-file"></span></span>
+    <span id="gen"></span>
+    <span id="notices"></span>
+    <span id="error" hidden></span>
+    <span class="spacer"></span>
+    <span id="agg"></span>
+  </footer>
+  <div id="settings" hidden>
+    <div class="settings-panel" role="dialog" aria-label="Settings">
+      <div class="settings-head"><strong>Settings</strong><button id="settings-close" class="btn-icon" title="Close (Esc)" aria-label="Close"><i data-icon="x"></i></button></div>
+      <div class="settings-section">
+        <div class="label">Theme</div>
+        <div id="scheme-choice" class="segmented">
+          <button data-scheme="system"><i data-icon="contrast" data-size="13"></i>Auto</button><button data-scheme="light"><i data-icon="sun" data-size="13"></i>Light</button><button data-scheme="dark"><i data-icon="moon" data-size="13"></i>Dark</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="label">Accent</div>
+        <div id="accent-choice" class="segmented">
+          <button data-accent="">Ink</button><button data-accent="amber">Amber</button><button data-accent="teal">Teal</button><button data-accent="indigo">Indigo</button><button data-accent="coral">Coral</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="label">Numbers</div>
+        <div id="numcolor-choice" class="segmented">
+          <button data-numcolor="on">Colored</button><button data-numcolor="off">Plain</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="label">Digit grouping</div>
+        <div id="numgroup-choice" class="segmented">
+          <button data-numgroup="on">1,234</button><button data-numgroup="off">1234</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="label">Histogram</div>
+        <div id="histscale-choice" class="segmented">
+          <button data-histscale="linear">Linear</button><button data-histscale="log">Log</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="label">This view</div>
+        <p id="about-view"></p>
+        <button id="copy-link" class="btn-primary"><i data-icon="link" data-size="13"></i><span class="btn-label">Copy link to this view</span></button>
+      </div>
+      <div class="settings-section">
+        <div class="label">About</div>
+        <dl id="about-list"></dl>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

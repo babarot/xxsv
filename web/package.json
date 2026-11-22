@@ -1,0 +1,19 @@
+{
+  "name": "xxsv-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "TZ=UTC LC_ALL=en_US.UTF-8 node --test \"src/**/*.test.ts\"",
+    "e2e": "playwright test",
+    "screenshot": "node scripts/screenshot.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.19.2",
+    "esbuild": "0.28.2",
+    "lucide": "1.77.0",
+    "typescript": "5.6.3"
+  }
+}

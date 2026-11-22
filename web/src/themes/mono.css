@@ -1,0 +1,89 @@
+/* mono: the default theme. Monochrome (zinc-like grays); the accent is the
+   text color, and only errors carry a hue. This file and other themes/*.css
+   are the only places that hold color values (see base.css). */
+[data-theme="mono"][data-scheme="light"] {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --surface-3: #e4e4e7;
+  --border: #ececee;
+  --border-strong: #d4d4d8;
+  --text: #18181b;
+  --text-muted: #71717a;
+  --text-faint: #a1a1aa;
+  --accent: #18181b;
+  --accent-contrast: #ffffff;
+  --focus-ring: #18181b33;
+  --chart-bar: #3f3f46;
+  --chart-bar-soft: #d4d4d8;
+  --chart-null: #a1a1aa;
+  --accent-soft: #f4f4f5;
+  --num: #2f7d63;
+  --danger: #b91c1c;
+  --danger-soft: #fef2f2;
+  --shadow: 0 8px 24px #0000001a, 0 1px 2px #0000000f;
+  color-scheme: light;
+}
+[data-theme="mono"][data-scheme="dark"] {
+  --bg: #09090b;
+  --surface: #111113;
+  --surface-2: #18181b;
+  --surface-3: #27272a;
+  --border: #1f1f23;
+  --border-strong: #3f3f46;
+  --text: #fafafa;
+  --text-muted: #a1a1aa;
+  --text-faint: #52525b;
+  --accent: #fafafa;
+  --accent-contrast: #09090b;
+  --focus-ring: #fafafa40;
+  --chart-bar: #d4d4d8;
+  --chart-bar-soft: #3f3f46;
+  --chart-null: #71717a;
+  --accent-soft: #18181b;
+  --num: #6cc5a1;
+  --danger: #f87171;
+  --danger-soft: #2a1215;
+  --shadow: 0 8px 24px #00000080, 0 1px 2px #00000066;
+  color-scheme: dark;
+}
+
+/* The glow on cells changed by the last reload (base.css: flash). */
+[data-theme="mono"] { --flash: color-mix(in srgb, var(--accent) 30%, transparent); }
+
+/* Accents: the grays stay and one hue goes to the accent, the bars and
+   the selection. Chosen in Settings (data-accent, kept in localStorage);
+   without one the accent is the ink above. Each hue is toned down (less
+   saturation, lighter in dark) so it sits among the zinc grays. */
+[data-theme="mono"][data-accent="amber"][data-scheme="light"] {
+  --accent: #d08a1a; --accent-contrast: #18181b; --focus-ring: #d08a1a40;
+  --chart-bar: #d39a2c; --chart-bar-soft: #f1dfb8; --accent-soft: #fcf6ea; --num: #a5650d;
+}
+[data-theme="mono"][data-accent="amber"][data-scheme="dark"] {
+  --accent: #eab04a; --accent-contrast: #09090b; --focus-ring: #eab04a40;
+  --chart-bar: #d9a446; --chart-bar-soft: #4a3a1a; --accent-soft: #1f1a10; --num: #e9b55c;
+}
+[data-theme="mono"][data-accent="teal"][data-scheme="light"] {
+  --accent: #1f8a80; --accent-contrast: #ffffff; --focus-ring: #1f8a8040;
+  --chart-bar: #2a9a8f; --chart-bar-soft: #bfe2dd; --accent-soft: #eef7f6; --num: #1b7a71;
+}
+[data-theme="mono"][data-accent="teal"][data-scheme="dark"] {
+  --accent: #4fc4b6; --accent-contrast: #09090b; --focus-ring: #4fc4b640;
+  --chart-bar: #45ada1; --chart-bar-soft: #16403b; --accent-soft: #0e1d1b; --num: #5fcabd;
+}
+[data-theme="mono"][data-accent="indigo"][data-scheme="light"] {
+  --accent: #5b5bd6; --accent-contrast: #ffffff; --focus-ring: #5b5bd640;
+  --chart-bar: #6b6bdc; --chart-bar-soft: #d3d3f4; --accent-soft: #f2f2fc; --num: #4b4cc2;
+}
+[data-theme="mono"][data-accent="indigo"][data-scheme="dark"] {
+  --accent: #9a9cf2; --accent-contrast: #09090b; --focus-ring: #9a9cf240;
+  --chart-bar: #8587e6; --chart-bar-soft: #2d2d5c; --accent-soft: #15152a; --num: #a4a6f5;
+}
+[data-theme="mono"][data-accent="coral"][data-scheme="light"] {
+  --accent: #d9634c; --accent-contrast: #ffffff; --focus-ring: #d9634c40;
+  --chart-bar: #de745f; --chart-bar-soft: #f4d1c8; --accent-soft: #fcf2ef; --num: #c0523c;
+}
+[data-theme="mono"][data-accent="coral"][data-scheme="dark"] {
+  --accent: #f08f7a; --accent-contrast: #09090b; --focus-ring: #f08f7a40;
+  --chart-bar: #e0806b; --chart-bar-soft: #4d241c; --accent-soft: #23130f; --num: #f39c88;
+}

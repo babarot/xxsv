@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- The xxsv mark (logo option B1: three cells and commas). A favicon
+       cannot read the page's theme tokens, so it carries the mono ink for
+       light and dark itself. -->
+  <style>
+    .cell { fill: #18181b; }
+    .comma { fill: none; stroke: #18181b; stroke-width: 1.6; stroke-linecap: round; }
+    @media (prefers-color-scheme: dark) {
+      .cell { fill: #fafafa; }
+      .comma { stroke: #fafafa; }
+    }
+  </style>
+  <rect class="cell" x="2" y="9" width="5" height="6" rx="1.2"/>
+  <rect class="cell" x="9.5" y="9" width="5" height="6" rx="1.2"/>
+  <rect class="cell" x="17" y="9" width="5" height="6" rx="1.2"/>
+  <path class="comma" d="M8.2 15.2l-.6 1.6M15.7 15.2l-.6 1.6"/>
+</svg>
