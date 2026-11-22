@@ -3,7 +3,8 @@ import { NULL_MARK } from "./constants.ts";
 import { abbr, edgeLabel, fmt, histStep, invalidText, isRange, round } from "./format.ts";
 import { icon } from "./icons.ts";
 import type { Column, Filter, Stats } from "./types.ts";
-import { S, setFilter, showColumns, toggleColPop, toggleMissing } from "./app.ts";
+import { S, currentQuery, setFilter, showColumns, toggleColPop, toggleMissing } from "./app.ts";
+import { check } from "./search.ts";
 import { positionPopovers } from "./cell-popover.ts";
 import { barsMax, histOf, histogram, missingLine, rowsOf, topBars } from "./charts.ts";
 import { $, el } from "./dom.ts";
@@ -143,13 +144,46 @@ export function filterForm(c: Column, s?: Stats) {
       }
     }
     if (pick.childElementCount) box.appendChild(pick);
-    const q = field(current?.op === "contains" ? current.value ?? "" : "", "contains…");
-    row.appendChild(q);
+    // Text: contains, or a regular expression with .* (checked by the
+    // server before it is applied; an error shows under the box).
+    let regex = current?.op === "regex";
+    const q = field(current?.op === "contains" || current?.op === "regex" ? current.value ?? "" : "", "");
+    const mode = el("span", "mode-seg");
+    const err = el("div", "ff-err");
+    err.hidden = true;
+    const setMode = (on: boolean) => {
+      regex = on;
+      mode.querySelectorAll("button").forEach((b) => b.classList.toggle("on", (b.dataset.mode === "regex") === on));
+      q.placeholder = on ? "regex (RE2)…" : "contains…";
+      err.hidden = true;
+    };
+    for (const [m, label, title] of [["contains", "abc", "Contains the text"], ["regex", ".*", "Matches a regular expression (RE2)"]]) {
+      const b = el("button", "", label) as HTMLButtonElement;
+      b.dataset.mode = m;
+      b.title = title;
+      b.addEventListener("click", () => setMode(m === "regex"));
+      mode.appendChild(b);
+    }
+    setMode(regex);
+    row.append(mode, q);
     box.appendChild(row);
+    box.appendChild(err);
     box.append(...missing());
-    const go = () => setFilter(c.name, q.value.trim() ? { column: c.name, op: "contains", value: q.value.trim() } : null);
-    apply.addEventListener("click", go);
-    q.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+    const go = async () => {
+      // A regular expression keeps its spaces; contains text is trimmed.
+      const value = regex ? q.value : q.value.trim();
+      if (!value) return setFilter(c.name, null);
+      const f: Filter = { column: c.name, op: regex ? "regex" : "contains", value };
+      if (regex) {
+        const msg = await check({ ...currentQuery(), filters: [...S.view.filters.filter((x) => x.column !== c.name), f] });
+        err.hidden = !msg;
+        err.textContent = msg.replace(/^filter on "[^"]*": /, "");
+        if (msg) return;
+      }
+      setFilter(c.name, f);
+    };
+    apply.addEventListener("click", () => void go());
+    q.addEventListener("keydown", (e) => { if (e.key === "Enter") void go(); });
   }
   box.appendChild(actions);
   return box;

@@ -70,7 +70,7 @@ test("the same generation again leaves the glow alone but still starts the rows 
 });
 
 test("changed columns close the distribution popover and drop filters and the sort on missing columns", () => {
-  const s = newState({ search: "", filters: [{ column: "b", op: "contains", value: "x" }, { column: "a", op: "null" }], sorts: [{ column: "a" }, { column: "b" }], columns: null, top: 5 });
+  const s = newState({ search: "", regex: false, filters: [{ column: "b", op: "contains", value: "x" }, { column: "a", op: "null" }], sorts: [{ column: "a" }, { column: "b" }], columns: null, top: 5 });
   applyMeta(s, meta(1));
   s.colPop = 2;
   s.cur = { r: 3, c: 2 };
@@ -131,7 +131,7 @@ test("a Shift-click adds a key, or cycles its own key, keeping the others", () =
   assert.deepEqual(nextSorts(full, "z", true), full);
 });
 
-const view = (columns: string[] | null) => ({ search: "", filters: [], sorts: [], columns, top: 0 });
+const view = (columns: string[] | null) => ({ search: "", regex: false, filters: [], sorts: [], columns, top: 0 });
 
 test("the shown columns follow view.columns, and their widths follow the names", () => {
   const s = newState(view(["c", "a"]));

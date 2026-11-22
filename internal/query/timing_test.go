@@ -45,6 +45,9 @@ func TestQueryTiming(t *testing.T) {
 	run("sort ok, then name (many ties)", Query{Sorts: []Sort{{Column: "ok"}, {Column: "name"}}})
 	run("search \"zulu yankee\"", Query{Search: "zulu yankee"})
 	run("search \"no-such-text\"", Query{Search: "no-such-text"})
+	run("regex search `foo\\d+`", Query{Search: `foo\d+`, Regex: true})
+	run("regex search `(?i)^zulu`", Query{Search: `(?i)^zulu`, Regex: true})
+	run("regex filter on name `^alpha (bravo|echo)`", Query{Filters: []Filter{{Column: "name", Op: OpRegex, Value: `^alpha (bravo|echo)`}}})
 	run("search \"2021-03\"", Query{Search: "2021-03"})
 	run("filter range + contains", Query{Filters: []Filter{
 		{Column: "price", Op: OpRange, Min: "100", Max: "200"},

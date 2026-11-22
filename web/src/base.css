@@ -50,7 +50,20 @@ button { font: inherit; color: inherit; }
 .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--text); font: inherit; }
 .search input::placeholder { color: var(--text-faint); }
 .search kbd { font: 11px var(--mono); padding: 0 5px; border-radius: 4px; border: 1px solid var(--border-strong); color: var(--text-muted); }
-.search:focus-within kbd { display: none; }
+/* The / mark hides while the box has focus, keeping its place: if it left
+   the layout, the .* toggle would move under the pointer between the press
+   and the release, and miss the click. */
+.search:focus-within kbd { visibility: hidden; }
+.search { position: relative; }
+.search .rx { height: 20px; min-width: 24px; padding: 0 4px; border-radius: 4px; border: 1px solid var(--border-strong); background: var(--surface); font: 11px var(--mono); color: var(--text-muted); cursor: pointer; }
+.search .rx:hover { color: var(--text); }
+.search .rx.on { background: var(--text); color: var(--surface); border-color: var(--text); }
+.search.bad { border-color: var(--danger); }
+.mode-seg { display: inline-flex; flex: none; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
+.mode-seg button { border: 0; background: var(--surface); color: var(--text-muted); font: 11px var(--mono); padding: 0 8px; height: 26px; cursor: pointer; }
+.mode-seg button.on { background: var(--text); color: var(--surface); }
+.ff-err { color: var(--danger); font: 11px/1.4 var(--mono); margin-top: 4px; }
+.search-err { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; max-width: 360px; font: 11px/1.4 var(--mono); color: var(--danger); background: var(--danger-soft); border: 1px solid var(--danger); border-radius: 6px; padding: 4px 8px; white-space: normal; }
 
 /* ---- formula bar ---- */
 #fbar { display: flex; align-items: stretch; height: 32px; flex: none; border-bottom: 1px solid var(--border); font-size: 12px; }

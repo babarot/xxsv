@@ -82,6 +82,7 @@ export function filterText(f: Filter, type?: ColType): [string, string] {
     case "null": return [f.column, "is missing"];
     case "notnull": return [f.column, "is not missing"];
     case "equals": return [f.column, `is “${f.value ?? ""}”`];
+    case "regex": return [f.column, `matches /${f.value ?? ""}/`];
     default: return [f.column, `contains “${f.value ?? ""}”`];
   }
 }
@@ -106,7 +107,7 @@ export function changeSummary(c: Changes): string {
 export function viewSentence(meta: Meta, total: number, view: ViewState) {
   const parts: string[] = [];
   parts.push(`${fmt(total)} of ${fmt(meta.rows)} rows`);
-  if (view.search) parts.push(`matching “${view.search}”`);
+  if (view.search) parts.push(view.regex ? `matching /${view.search}/` : `matching “${view.search}”`);
   const typeOf = (name: string) => meta.columns.find((c) => c.name === name)?.type;
   if (view.filters.length) parts.push("where " + view.filters.map((f) => filterText(f, typeOf(f.column)).join(" ")).join(" and "));
   const hidden = view.columns ? meta.columns.length - view.columns.length : 0;

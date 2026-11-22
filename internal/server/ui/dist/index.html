@@ -26,7 +26,9 @@
     <label class="search">
       <i data-icon="search" data-size="14"></i>
       <input id="search" type="search" placeholder="Search all cells" autocomplete="off" spellcheck="false">
+      <button id="search-rx" class="rx" title="Regular expression (RE2): case-sensitive; (?i) ignores case" aria-label="Regular expression" aria-pressed="false">.*</button>
       <kbd>/</kbd>
+      <span id="search-err" class="search-err" hidden></span>
     </label>
     <button id="settings-btn" class="btn-ghost btn-square" title="Settings" aria-label="Settings"><i data-icon="settings"></i></button>
   </header>

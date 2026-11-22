@@ -79,7 +79,7 @@ export function cycleSort(column: string, add: boolean) {
 }
 
 export function currentQuery() {
-  return { search: S.view.search, filters: S.view.filters, sorts: S.view.sorts, columns: S.view.columns ?? undefined };
+  return { search: S.view.search, regex: S.view.regex || undefined, filters: S.view.filters, sorts: S.view.sorts, columns: S.view.columns ?? undefined };
 }
 
 // showColumns shows the named columns in that order (null: every column),

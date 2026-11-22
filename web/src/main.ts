@@ -10,10 +10,11 @@
 import { writeHashNow } from "./hash.ts";
 import { hydrateIcons } from "./icons.ts";
 import { wholeColumn, wholeRow } from "./selection.ts";
-import { S, cycleSort, moveBy, refresh, resetRows, select, toggleColPop, toggleMissing } from "./app.ts";
+import { S, cycleSort, moveBy, refresh, select, toggleColPop, toggleMissing } from "./app.ts";
 import { columnsMenuOpen, renderColumnsMenu, toggleColumnsMenu } from "./columns-menu.ts";
 import { exportMenuOpen, renderExportMenu, toggleExportMenu } from "./export-menu.ts";
 import { wireValuesPanel } from "./values-panel.ts";
+import { wireSearch } from "./search.ts";
 import { filterBySelected, renderSelectionInfo } from "./cell-popover.ts";
 import { $, copyText } from "./dom.ts";
 import { grid, isLong, render, scheduleRender } from "./grid.ts";
@@ -34,17 +35,8 @@ function setup() {
   hydrateIcons();
   S.histScale = histScale();
   S.numGroup = numGroup();
+  wireSearch();
   const search = $<HTMLInputElement>("search");
-  search.value = S.view.search;
-  let timer = 0;
-  search.addEventListener("input", () => {
-    clearTimeout(timer);
-    timer = window.setTimeout(() => {
-      S.view.search = search.value;
-      S.view.top = 0;
-      resetRows();
-    }, 250);
-  });
 
   const g = grid();
   // A Shift-press in the table extends the range or adds a sort key; the

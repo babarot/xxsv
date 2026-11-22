@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -185,6 +186,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/cell", s.handleCell)
 	mux.HandleFunc("GET /api/row", s.handleRow)
 	mux.HandleFunc("POST /api/values", s.handleValues)
+	mux.HandleFunc("POST /api/check", s.handleCheck)
 	mux.HandleFunc("POST /api/export", s.handleExportStart)
 	mux.HandleFunc("GET /api/export/{token}", s.handleExportDownload)
 	mux.HandleFunc("POST /api/aggregate", s.handleAggregate)
@@ -363,6 +365,7 @@ func (s *Server) handleRows(w http.ResponseWriter, r *http.Request) {
 // filters and sort keys as /api/rows, and the range of cells in that order.
 type AggregateRequest struct {
 	Search  string         `json:"search,omitempty"`
+	Regex   bool           `json:"regex,omitempty"`
 	Filters []query.Filter `json:"filters,omitempty"`
 	Sorts   []query.Sort   `json:"sorts,omitempty"`
 	Columns []string       `json:"columns,omitempty"`
@@ -378,7 +381,7 @@ func (s *Server) handleAggregate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	snap := s.cur.Load()
-	agg, err := snap.engine.Aggregate(query.Query{Search: req.Search, Filters: req.Filters, Sorts: req.Sorts, Columns: req.Columns}, req.Range)
+	agg, err := snap.engine.Aggregate(query.Query{Search: req.Search, Regex: req.Regex, Filters: req.Filters, Sorts: req.Sorts, Columns: req.Columns}, req.Range)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, query.ErrBadQuery) {
@@ -395,6 +398,27 @@ func (s *Server) handleAggregate(w http.ResponseWriter, r *http.Request) {
 
 // handleCell returns one cell in full. Row numbers change from one load to
 // the next, so the request names the generation it saw the row in.
+// handleCheck says what is wrong with a query without running it, as
+// {"error": "..."}, or {"error": ""} for a good one. The page checks a
+// regular expression before the table takes it; a 400 would also show as an
+// error in the browser's console.
+func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {
+	var q query.Query
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&q); err != nil {
+		writeError(w, http.StatusBadRequest, "bad request body: "+err.Error())
+		return
+	}
+	msg := ""
+	if err := s.cur.Load().engine.Check(q); err != nil {
+		msg = strings.TrimPrefix(err.Error(), query.ErrBadQuery.Error()+": ")
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Error string `json:"error"`
+	}{msg})
+}
+
 // ValuesResponse is the body of POST /api/values.
 type ValuesResponse struct {
 	Generation uint64 `json:"generation"`

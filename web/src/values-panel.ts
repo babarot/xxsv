@@ -61,7 +61,7 @@ async function loadMore() {
   const mine = request;
   try {
     const res = await api<ValuesResponse>("/api/values", post({
-      query: { search: S.view.search, filters: S.view.filters },
+      query: { search: S.view.search, regex: S.view.regex || undefined, filters: S.view.filters },
       column: S.valuesCol, search, offset: items.length, limit: PAGE,
     }));
     if (mine !== request || res.generation !== S.meta?.generation) return;

@@ -78,7 +78,7 @@ func (e *Engine) Values(vq ValuesQuery) (*Values, error) {
 	case limit > MaxLimit:
 		limit = MaxLimit
 	}
-	q := Query{Search: vq.Query.Search}
+	q := Query{Search: vq.Query.Search, Regex: vq.Query.Regex}
 	for _, f := range vq.Query.Filters {
 		if f.Column != vq.Column {
 			q.Filters = append(q.Filters, f)

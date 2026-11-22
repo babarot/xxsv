@@ -471,3 +471,25 @@ func TestRowAPI(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckAPI(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.csv")
+	writeFile(t, path, "a\nx\n")
+	_, base := start(t, path)
+	for body, want := range map[string]string{
+		`{"search":"x(","regex":true}`:  "search: error parsing regexp: missing closing ): `x(`",
+		`{"search":"x(","regex":false}`: "",
+		`{"columns":["nope"]}`:          `unknown column "nope"`,
+	} {
+		resp, err := http.Post(base+"/api/check", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var v struct{ Error string }
+		_ = json.NewDecoder(resp.Body).Decode(&v)
+		resp.Body.Close()
+		if resp.StatusCode != 200 || v.Error != want {
+			t.Errorf("%s: %d %q, want %q", body, resp.StatusCode, v.Error, want)
+		}
+	}
+}
