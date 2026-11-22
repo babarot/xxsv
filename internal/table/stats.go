@@ -3,9 +3,11 @@ package table
 import (
 	"encoding/json"
 	"math"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -62,13 +64,50 @@ type TopValue struct {
 	Count int    `json:"count"`
 }
 
-// Stats computes the statistics of every column.
+// Stats computes the statistics of every column, the columns in parallel.
 func (t *Table) Stats() []Stats {
 	out := make([]Stats, len(t.Columns))
+	sem := make(chan struct{}, runtime.GOMAXPROCS(0))
+	var wg sync.WaitGroup
 	for i, c := range t.Columns {
-		out[i] = c.Stats()
+		sem <- struct{}{}
+		wg.Go(func() {
+			defer func() { <-sem }()
+			out[i] = c.Stats()
+		})
 	}
+	wg.Wait()
 	return out
+}
+
+// topLimit is how many of the most frequent values Stats reports.
+const topLimit = 15
+
+// topValues returns the n most frequent values, most frequent first; ties
+// keep the order of first appearance. It keeps only the n best while it
+// goes, as a column of millions of distinct values needs no full sort.
+func topValues(firstSeen []string, counts map[string]int, n int) []TopValue {
+	top := make([]TopValue, 0, n+1)
+	for _, v := range firstSeen {
+		cnt := counts[v]
+		if len(top) == n && cnt <= top[n-1].Count {
+			continue
+		}
+		// Insert after every value with as many or more cells, so that an
+		// earlier value wins a tie.
+		i := len(top)
+		for i > 0 && top[i-1].Count < cnt {
+			i--
+		}
+		top = slices.Insert(top, i, TopValue{v, cnt})
+		if len(top) > n {
+			top = top[:n]
+		}
+	}
+	if len(top) == 0 {
+		return nil
+	}
+	return top
 }
 
 // Stats computes the column's statistics.
@@ -151,11 +190,7 @@ func (c *Column) Stats() Stats {
 		if c.Type == JSON {
 			break
 		}
-		// Most frequent first; ties keep the order of first appearance.
-		slices.SortStableFunc(firstSeen, func(a, b string) int { return counts[b] - counts[a] })
-		for _, v := range firstSeen[:min(15, len(firstSeen))] {
-			s.Top = append(s.Top, TopValue{v, counts[v]})
-		}
+		s.Top = topValues(firstSeen, counts, topLimit)
 	}
 	for i := range rows {
 		if c.IsInvalid(i) {

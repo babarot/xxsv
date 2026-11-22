@@ -23,6 +23,23 @@ func TestStatsNumeric(t *testing.T) {
 	eq(t, "histogram total", sum(s.Histogram.Counts), 4)
 }
 
+func TestStatsTopLimit(t *testing.T) {
+	// 20 values seen once, then "late" three times: "late" comes first,
+	// and the ties that follow keep the order of first appearance.
+	var b strings.Builder
+	b.WriteString("c\n")
+	for i := range 20 {
+		fmt.Fprintf(&b, "v%02d\n", i)
+	}
+	b.WriteString("late\nlate\nlate\n")
+	s := load(t, CSV, b.String(), Options{}).Columns[0].Stats()
+	want := []TopValue{{"late", 3}}
+	for i := range topLimit - 1 {
+		want = append(want, TopValue{fmt.Sprintf("v%02d", i), 1})
+	}
+	eq(t, "top", s.Top, want)
+}
+
 func TestStatsExactIntegerBounds(t *testing.T) {
 	tb := load(t, CSV, "id\n9007199254740993\n9007199254740992\n", Options{})
 	s := tb.Columns[0].Stats()
