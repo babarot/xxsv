@@ -9,6 +9,7 @@ import { api } from "./api.ts";
 import { S, setFilter } from "./app.ts";
 import { $, copyText, el } from "./dom.ts";
 import { cellAt, isLong, render } from "./grid.ts";
+import { openValues } from "./values-panel.ts";
 
 // renderSelectionInfo fills the formula bar, the cell popover and the pinned
 // panel for the active cell, fetching the full value of a cut cell.
@@ -67,7 +68,7 @@ export function renderSelectionInfo() {
   const ready = !cell.cut || full !== null;
   renderFbarFilter(col, cell, value, ready);
   renderPeek(col, cell, value, ready);
-  renderPinPanel(S.pinned ? { col, cell, value, ready } : null);
+  renderPinPanel(S.panel === "cell" ? { col, cell, value, ready } : null);
 }
 
 export function valueBlock(col: Column, cell: CellInfo, value: string, ready: boolean, mode: "peek" | "pin") {
@@ -80,7 +81,7 @@ export function valueBlock(col: Column, cell: CellInfo, value: string, ready: bo
   close.appendChild(icon(mode === "peek" ? "x" : "pin-off", 13));
   close.addEventListener("click", () => {
     if (mode === "peek") S.expanded = false;
-    else S.pinned = false;
+    else S.panel = null;
     render();
     renderSelectionInfo();
   });
@@ -100,7 +101,7 @@ export function valueBlock(col: Column, cell: CellInfo, value: string, ready: bo
     const pin = el("button", "btn-ghost") as HTMLButtonElement;
     pin.append(icon("pin", 13), el("span", "btn-label", "Pin to side"));
     pin.addEventListener("click", () => {
-      S.pinned = true;
+      S.panel = "cell";
       S.expanded = false;
       render();
       renderSelectionInfo();
@@ -113,7 +114,7 @@ export function valueBlock(col: Column, cell: CellInfo, value: string, ready: bo
 
 export function renderPeek(col: Column, cell: CellInfo, value: string, ready: boolean) {
   const peek = $("peek");
-  if (!S.expanded || S.pinned || !isLong(S.cur)) {
+  if (!S.expanded || S.panel === "cell" || !isLong(S.cur)) {
     peek.hidden = true;
     return;
   }
@@ -122,15 +123,47 @@ export function renderPeek(col: Column, cell: CellInfo, value: string, ready: bo
   positionPopovers();
 }
 
+// renderPinPanel draws the side panel when it shows the selected cell; the
+// values tab draws itself (values-panel.ts).
 export function renderPinPanel(info: { col: Column; cell: CellInfo; value: string; ready: boolean } | null) {
   const panel = $("pinpanel");
-  if (!S.pinned) {
+  if (S.panel === null) {
     panel.hidden = true;
     return;
   }
   panel.hidden = false;
-  if (info) panel.replaceChildren(valueBlock(info.col, info.cell, info.value, info.ready, "pin"));
-  else panel.replaceChildren(el("div", "dim", "Loading…"));
+  if (S.panel !== "cell") return;
+  const body = info ? valueBlock(info.col, info.cell, info.value, info.ready, "pin") : el("div", "dim", "Loading…");
+  panel.replaceChildren(panelTabs(), body);
+}
+
+// panelTabs are the side panel's tabs: the selected cell, and the values of
+// a column (the selected cell's column, unless one was chosen).
+export function panelTabs() {
+  const tabs = el("div", "ptabs");
+  const tab = (p: "cell" | "values", label: string) => {
+    const b = el("button", S.panel === p ? "on" : "", label) as HTMLButtonElement;
+    b.dataset.panel = p;
+    b.addEventListener("click", () => {
+      if (S.panel === p) return;
+      S.panel = p;
+      if (p === "values") openValues(S.valuesCol ?? S.cols[S.cur.c]?.name ?? null);
+      else renderSelectionInfo();
+    });
+    return b;
+  };
+  tabs.append(tab("cell", "Cell"), tab("values", "Values"));
+  const close = el("button", "btn-icon") as HTMLButtonElement;
+  close.title = "Close the side panel";
+  close.setAttribute("aria-label", close.title);
+  close.appendChild(icon("x", 13));
+  close.addEventListener("click", () => {
+    S.panel = null;
+    render();
+    renderSelectionInfo();
+  });
+  tabs.appendChild(close);
+  return tabs;
 }
 
 // positionPopovers keeps the cell popover under its cell (above it near the

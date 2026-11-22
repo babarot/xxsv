@@ -40,7 +40,10 @@ export interface State {
   cur: Pos;
   anchor: Pos;
   expanded: boolean; // the cell popover is open
-  pinned: boolean; // the cell popover sits in the side panel instead
+  // panel is what the side panel shows: the selected cell (the cell popover
+  // pinned to the side), a column's values, or nothing (closed).
+  panel: Panel;
+  valuesCol: string | null; // the column whose values the panel lists
   colPop: number | null; // column whose distribution popover is open
   fullValue: { key: string; value: string } | null; // full text of a cut cell
   histScale: "linear" | "log";
@@ -54,6 +57,8 @@ export interface State {
 // meta. pending is set when a reload is seen, until those rows arrive. seen
 // shows the summary. All stay unset on the first load and after a browser
 // reload: nothing glows, and no summary is shown.
+export type Panel = "cell" | "values" | null;
+
 export interface Flash { at: number | null; pending: boolean; seen: boolean }
 
 export function newState(view: ViewState = emptyView()): State {
@@ -61,7 +66,7 @@ export function newState(view: ViewState = emptyView()): State {
     meta: null, cols: [], fileIdx: [], allStats: [], stats: [], widthOf: new Map(), widths: [], widthsPending: false,
     rownumW: 52, view, total: 0, epoch: 0,
     cur: { r: 0, c: 0 }, anchor: { r: 0, c: 0 },
-    expanded: false, pinned: false, colPop: null, fullValue: null,
+    expanded: false, panel: null, valuesCol: null, colPop: null, fullValue: null,
     histScale: "linear", numGroup: true, flash: { at: null, pending: false, seen: false },
   };
 }

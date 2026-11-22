@@ -13,6 +13,7 @@ import { wholeColumn, wholeRow } from "./selection.ts";
 import { S, cycleSort, moveBy, refresh, resetRows, select, toggleColPop, toggleMissing } from "./app.ts";
 import { columnsMenuOpen, renderColumnsMenu, toggleColumnsMenu } from "./columns-menu.ts";
 import { exportMenuOpen, renderExportMenu, toggleExportMenu } from "./export-menu.ts";
+import { wireValuesPanel } from "./values-panel.ts";
 import { filterBySelected, renderSelectionInfo } from "./cell-popover.ts";
 import { $, copyText } from "./dom.ts";
 import { grid, isLong, scheduleRender } from "./grid.ts";
@@ -120,7 +121,7 @@ function setup() {
       moveBy(...moves[e.key], e.shiftKey);
     } else if (e.key === " ") {
       e.preventDefault();
-      if (isLong(S.cur) && !S.pinned) {
+      if (isLong(S.cur) && S.panel !== "cell") {
         S.expanded = !S.expanded;
         renderSelectionInfo();
       }
@@ -130,6 +131,7 @@ function setup() {
   $("fbar-filter").addEventListener("click", filterBySelected);
   $("cols-btn").addEventListener("click", () => toggleColumnsMenu());
   $("export-btn").addEventListener("click", () => toggleExportMenu());
+  wireValuesPanel();
   // The "N hidden" link next to the counts opens the column list too.
   $("counts").addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("#hidden-link")) toggleColumnsMenu(true);

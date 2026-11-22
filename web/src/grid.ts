@@ -117,7 +117,7 @@ export function render() {
       if (i >= r0 && i <= r1 && c >= c0 && c <= c1) cell.classList.add("inr");
       if (i === S.cur.r && c === S.cur.c) {
         cell.classList.add("cur");
-        if (!S.pinned && isLong({ r: i, c })) {
+        if (S.panel !== "cell" && isLong({ r: i, c })) {
           const x = el("button", "xmark") as HTMLButtonElement;
           x.title = "Show the full value (Space, or double-click)";
           x.setAttribute("aria-label", "Show the full value");

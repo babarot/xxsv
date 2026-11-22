@@ -172,6 +172,23 @@ button { font: inherit; color: inherit; }
 .actions .btn-ghost { height: 26px; color: var(--text); gap: 5px; }
 #pinpanel { width: 320px; flex: none; border-left: 1px solid var(--border); background: var(--bg); overflow: auto; padding: 14px; }
 #pinpanel .vb-pre { max-height: none; }
+
+/* ---- side panel tabs and the value list ---- */
+.ptabs { display: flex; align-items: center; gap: 2px; margin: -4px 0 12px; border-bottom: 1px solid var(--border); }
+.ptabs button[data-panel] { border: 0; background: none; padding: 6px 10px; font-size: 12px; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.ptabs button[data-panel]:hover { color: var(--text); }
+.ptabs button.on { color: var(--text); border-bottom-color: var(--text); font-weight: 600; }
+.ptabs .btn-icon { margin-left: auto; }
+#pinpanel .col-title select { margin-left: auto; max-width: 140px; font: 12px var(--sans); color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px; padding: 2px 4px; }
+.vals-summary { margin-bottom: 8px; }
+.vals-search { width: 100%; height: 28px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: 12px var(--sans); padding: 0 8px; outline: 0; margin-bottom: 8px; }
+.vals-search:focus { box-shadow: 0 0 0 3px var(--focus-ring); }
+.vals-list .vals-item { display: flex; align-items: center; gap: 8px; width: 100%; height: 24px; padding: 0 4px; border: 0; border-radius: 4px; background: none; font: inherit; font-size: 12px; color: var(--text); text-align: left; cursor: pointer; }
+.vals-list .vals-item:hover { background: var(--surface-2); }
+.vals-list .vals-item.on { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.vals-list .vals-item span { width: 46%; }
+.vals-list .vals-item span.null { color: var(--text-faint); }
+.vals-list .pct { flex: none; width: 42px; text-align: right; font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .typ { font: 10px var(--mono); color: var(--text-faint); white-space: nowrap; }
 .col-title { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
 .col-title b { font-size: 15px; }

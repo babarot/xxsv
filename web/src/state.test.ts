@@ -15,7 +15,7 @@ test("newQuery moves the epoch on, resets the selection and keeps panels and the
   s.cur = { r: 7, c: 2 };
   s.anchor = { r: 9, c: 0 };
   s.expanded = true;
-  s.pinned = true;
+  s.panel = "values";
   s.colPop = 1;
   s.fullValue = { key: "k", value: "v" };
   s.flash = { at: 5, pending: false, seen: true };
@@ -26,7 +26,7 @@ test("newQuery moves the epoch on, resets the selection and keeps panels and the
   assert.deepEqual(s.anchor, { r: 0, c: 2 });
   assert.equal(s.expanded, false);
   assert.equal(s.fullValue, null);
-  assert.equal(s.pinned, true);
+  assert.equal(s.panel, "values");
   assert.equal(s.colPop, 1);
   assert.deepEqual(s.flash, { at: 5, pending: false, seen: true });
 });
@@ -44,14 +44,14 @@ test("a new generation stops the glow and waits for the new rows", () => {
   applyMeta(s, meta(1));
   s.flash = { at: 100, pending: false, seen: true };
   s.colPop = 0;
-  s.pinned = true;
+  s.panel = "values";
   const e = s.epoch;
   const { columnsChanged } = applyMeta(s, meta(2));
   assert.equal(columnsChanged, false);
   assert.equal(s.epoch, e + 1);
   assert.deepEqual(s.flash, { at: null, pending: true, seen: true });
   assert.equal(s.colPop, 0); // same columns: the popover stays
-  assert.equal(s.pinned, true);
+  assert.equal(s.panel, "values");
   rowsShown(s, 500);
   assert.deepEqual(s.flash, { at: 500, pending: false, seen: true });
   assert.equal(flashElapsed(s, 800), 300);
