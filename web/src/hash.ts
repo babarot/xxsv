@@ -2,7 +2,7 @@
 // browser reload.
 import type { ViewState } from "./types.ts";
 
-export const emptyView = (): ViewState => ({ search: "", filters: [], sorts: [], top: 0 });
+export const emptyView = (): ViewState => ({ search: "", filters: [], sorts: [], columns: null, top: 0 });
 
 // parseHash reads a hash (without "#"); anything it cannot read gives the
 // empty view, and missing fields their defaults. A hash from before sort
@@ -13,7 +13,8 @@ export function parseHash(hash: string): ViewState {
     if (!raw) return emptyView();
     const v = JSON.parse(raw);
     const sorts = Array.isArray(v.sorts) ? v.sorts : v.sort ? [v.sort] : [];
-    return { search: v.search ?? "", filters: v.filters ?? [], sorts, top: v.top ?? 0 };
+    const columns = Array.isArray(v.columns) && v.columns.length ? v.columns : null;
+    return { search: v.search ?? "", filters: v.filters ?? [], sorts, columns, top: v.top ?? 0 };
   } catch {
     return emptyView();
   }

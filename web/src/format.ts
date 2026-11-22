@@ -109,6 +109,8 @@ export function viewSentence(meta: Meta, total: number, view: ViewState) {
   if (view.search) parts.push(`matching “${view.search}”`);
   const typeOf = (name: string) => meta.columns.find((c) => c.name === name)?.type;
   if (view.filters.length) parts.push("where " + view.filters.map((f) => filterText(f, typeOf(f.column)).join(" ")).join(" and "));
+  const hidden = view.columns ? meta.columns.length - view.columns.length : 0;
+  if (hidden > 0) parts.push(`${fmt(hidden)} of ${fmt(meta.columns.length)} columns hidden`);
   if (view.sorts.length) parts.push("sorted by " + view.sorts.map((k) => `${k.column} ${k.desc ? "descending" : "ascending"}`).join(", then "));
   return parts.join(", ") + ".";
 }

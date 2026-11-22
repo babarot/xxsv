@@ -186,6 +186,38 @@ func TestContainsFold(t *testing.T) {
 	}
 }
 
+func TestColumns(t *testing.T) {
+	e := engine(t, sample)
+	res, err := e.Run(Query{Columns: []string{"name", "id"}, Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	eq(t, "rows in the asked order", res.Rows, [][]string{{"alice", "1"}, {"bob", "2"}})
+	eq(t, "file positions", res.Cols, []int{1, 0})
+	all, _ := e.Run(Query{Limit: 1})
+	eq(t, "no columns: every column", all.Cols, []int{0, 1, 2, 3, 4, 5})
+	// A hidden column still filters and sorts.
+	eq(t, "sort by a hidden column", ids(t, e, Query{Columns: []string{"name"}, Sorts: []Sort{{Column: "score", Desc: true}}}), []int{4, 0, 3, 2, 1})
+	// Cut cells are reported at their position in the returned columns.
+	long := engine(t, "a,b\nx,"+strings.Repeat("y", 50)+"\n")
+	cut, _ := e.Run(Query{})
+	eq(t, "no cut", len(cut.Cut), 0)
+	cut, _ = long.Run(Query{Columns: []string{"b", "a"}, MaxCellBytes: 10})
+	eq(t, "cut at its returned position", cut.Cut, [][2]int{{0, 0}})
+	for _, cols := range [][]string{{"nope"}, {"id", "id"}} {
+		if _, err := e.Run(Query{Columns: cols}); !errors.Is(err, ErrBadQuery) {
+			t.Errorf("columns %v: got %v, want ErrBadQuery", cols, err)
+		}
+	}
+	// An aggregate's columns are positions in the query's columns: score,
+	// then id.
+	a, err := e.Aggregate(Query{Columns: []string{"score", "id"}}, Range{R0: 0, R1: 4, C0: 1, C1: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	eq(t, "aggregate over the second returned column (id)", *a.Sum, 15.0)
+}
+
 func TestAggregate(t *testing.T) {
 	e := engine(t, sample)
 	// sample: id 1..5; score 3.5, missing, 1.25, 3.5, 10; name strings

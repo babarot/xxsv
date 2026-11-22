@@ -27,9 +27,13 @@ type Query struct {
 	Search  string   `json:"search,omitempty"`
 	Filters []Filter `json:"filters,omitempty"`
 	// Sorts are the sort keys, compared in order; at most MaxSortKeys.
-	Sorts  []Sort `json:"sorts,omitempty"`
-	Offset int    `json:"offset"`
-	Limit  int    `json:"limit"`
+	Sorts []Sort `json:"sorts,omitempty"`
+	// Columns are the columns to return and their order, by name; empty
+	// means every column in file order. They also set what an aggregate
+	// range's columns refer to.
+	Columns []string `json:"columns,omitempty"`
+	Offset  int      `json:"offset"`
+	Limit   int      `json:"limit"`
 	// MaxCellBytes cuts each returned cell to about this many bytes, at a
 	// character boundary; 0 means DefaultMaxCellBytes. A Claude Code
 	// session can hold cells of more than 1 MB.
@@ -75,9 +79,13 @@ type Result struct {
 	Total int `json:"total"`
 	// RowIDs are the matched rows' positions in the file, starting at 0.
 	RowIDs []int `json:"rowIds"`
-	// Rows holds the cells' raw text, cut to MaxCellBytes.
+	// Rows holds the cells' raw text, cut to MaxCellBytes, in the columns
+	// of the query (Query.Columns).
 	Rows [][]string `json:"rows"`
-	// Cut lists the cells that were cut, as [row index in Rows, column].
+	// Cols are the file positions of the returned columns, in their order.
+	Cols []int `json:"-"`
+	// Cut lists the cells that were cut, as [row index in Rows, column in
+	// Rows].
 	Cut [][2]int `json:"cut,omitempty"`
 }
 
@@ -141,20 +149,24 @@ func (e *Engine) Run(q Query) (*Result, error) {
 	if maxCell <= 0 {
 		maxCell = DefaultMaxCellBytes
 	}
+	cols, err := e.Columns(q.Columns)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := e.match(q)
 	if err != nil {
 		return nil, err
 	}
-	res := &Result{Total: len(rows), RowIDs: []int{}, Rows: [][]string{}}
+	res := &Result{Total: len(rows), RowIDs: []int{}, Rows: [][]string{}, Cols: cols}
 	if q.Offset >= len(rows) {
 		return res, nil
 	}
 	page := rows[q.Offset:min(len(rows), q.Offset+limit)]
 	for ri, r := range page {
 		res.RowIDs = append(res.RowIDs, int(r))
-		out := make([]string, len(e.t.Columns))
-		for ci, c := range e.t.Columns {
-			s := c.Raw[r]
+		out := make([]string, len(cols))
+		for ci, fi := range cols {
+			s := e.t.Columns[fi].Raw[r]
 			if len(s) > maxCell {
 				s = cut(s, maxCell)
 				res.Cut = append(res.Cut, [2]int{ri, ci})
@@ -166,6 +178,33 @@ func (e *Engine) Run(q Query) (*Result, error) {
 	return res, nil
 }
 
+// Columns returns the file positions of the named columns, in order: every
+// column for none. A name the table lacks, or one given twice, is a bad
+// query.
+func (e *Engine) Columns(names []string) ([]int, error) {
+	if len(names) == 0 {
+		cols := make([]int, len(e.t.Columns))
+		for i := range cols {
+			cols[i] = i
+		}
+		return cols, nil
+	}
+	cols := make([]int, 0, len(names))
+	seen := make(map[string]bool, len(names))
+	for _, n := range names {
+		i, ok := e.index[n]
+		if !ok {
+			return nil, badQuery("unknown column %q", n)
+		}
+		if seen[n] {
+			return nil, badQuery("column %q given twice", n)
+		}
+		seen[n] = true
+		cols = append(cols, i)
+	}
+	return cols, nil
+}
+
 // cut shortens s to at most n bytes without splitting a character.
 func cut(s string, n int) string {
 	for n > 0 && !utf8.RuneStart(s[n]) {
@@ -175,7 +214,8 @@ func cut(s string, n int) string {
 }
 
 // Range is a block of cells in the matched, sorted rows: rows R0..R1 (by
-// position after filtering and sorting) and columns C0..C1, inclusive.
+// position after filtering and sorting) and columns C0..C1 (by position in
+// the query's columns), inclusive.
 type Range struct {
 	R0 int `json:"r0"`
 	R1 int `json:"r1"`
@@ -199,6 +239,10 @@ type Aggregate struct {
 // The range is clamped to the matched rows and the columns. It reuses the
 // cached order, so scrolling or moving the range does not sort again.
 func (e *Engine) Aggregate(q Query, r Range) (*Aggregate, error) {
+	cols, err := e.Columns(q.Columns)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := e.match(q)
 	if err != nil {
 		return nil, err
@@ -211,7 +255,7 @@ func (e *Engine) Aggregate(q Query, r Range) (*Aggregate, error) {
 		r.C0, r.C1 = r.C1, r.C0
 	}
 	r.R0, r.C0 = max(r.R0, 0), max(r.C0, 0)
-	r.R1, r.C1 = min(r.R1, len(rows)-1), min(r.C1, len(e.t.Columns)-1)
+	r.R1, r.C1 = min(r.R1, len(rows)-1), min(r.C1, len(cols)-1)
 	if r.R0 > r.R1 || r.C0 > r.C1 {
 		return out, nil
 	}
@@ -220,8 +264,8 @@ func (e *Engine) Aggregate(q Query, r Range) (*Aggregate, error) {
 	// then left out, since JSON cannot carry +Inf.
 	var sum, mean float64
 	lo, hi := math.Inf(1), math.Inf(-1)
-	for ci := r.C0; ci <= r.C1; ci++ {
-		c := e.t.Columns[ci]
+	for _, fi := range cols[r.C0 : r.C1+1] {
+		c := e.t.Columns[fi]
 		for _, row := range rows[r.R0 : r.R1+1] {
 			i := int(row)
 			if c.IsMissing(i) {

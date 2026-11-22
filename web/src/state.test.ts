@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_SORT_KEYS, applyMeta, applyStats, fitWidths, flashElapsed, newQuery, newState, nextSorts, rowsShown } from "./state.ts";
+import { MAX_SORT_KEYS, applyMeta, applyStats, fitWidths, flashElapsed, newQuery, newState, nextSorts, rowsShown, setColumns } from "./state.ts";
 import type { Meta, Stats } from "./types.ts";
 
 const meta = (generation: number, columns = ["a", "b", "c"]): Meta => ({
@@ -70,7 +70,7 @@ test("the same generation again leaves the glow alone but still starts the rows 
 });
 
 test("changed columns close the distribution popover and drop filters and the sort on missing columns", () => {
-  const s = newState({ search: "", filters: [{ column: "b", op: "contains", value: "x" }, { column: "a", op: "null" }], sorts: [{ column: "a" }, { column: "b" }], top: 5 });
+  const s = newState({ search: "", filters: [{ column: "b", op: "contains", value: "x" }, { column: "a", op: "null" }], sorts: [{ column: "a" }, { column: "b" }], columns: null, top: 5 });
   applyMeta(s, meta(1));
   s.colPop = 2;
   s.cur = { r: 3, c: 2 };
@@ -109,7 +109,8 @@ test("stats are taken for the meta's generation only, and dropped with the colum
   assert.deepEqual(s.stats, []);
   assert.equal(applyStats(s, 2, st), true);
   applyMeta(s, meta(3)); // same columns: the stats stay until the new ones come
-  assert.equal(s.stats, st);
+  assert.equal(s.allStats, st);
+  assert.equal(s.stats[0], st[0]);
   applyMeta(s, meta(4, ["a", "z"]));
   assert.deepEqual(s.stats, []);
 });
@@ -128,4 +129,53 @@ test("a Shift-click adds a key, or cycles its own key, keeping the others", () =
   assert.deepEqual(nextSorts([{ column: "a", desc: true }, { column: "b" }], "a", true), [{ column: "b" }]);
   const full = Array.from({ length: MAX_SORT_KEYS }, (_, i) => ({ column: "c" + i }));
   assert.deepEqual(nextSorts(full, "z", true), full);
+});
+
+const view = (columns: string[] | null) => ({ search: "", filters: [], sorts: [], columns, top: 0 });
+
+test("the shown columns follow view.columns, and their widths follow the names", () => {
+  const s = newState(view(["c", "a"]));
+  applyMeta(s, meta(1));
+  assert.deepEqual(s.cols.map((c) => c.name), ["c", "a"]);
+  assert.deepEqual(s.fileIdx, [2, 0]);
+  fitWidths(s, [["x".repeat(30), "y"]]); // rows come in the shown columns
+  const wc = s.widthOf.get("c")!, wa = s.widthOf.get("a")!;
+  assert.ok(wc > wa);
+  setColumns(s, ["a", "b", "c"]); // every column in file order: null
+  assert.equal(s.view.columns, null);
+  assert.deepEqual(s.widths.slice(0, 1).concat(s.widths.slice(2)), [wa, wc]); // a and c keep their widths
+  assert.ok(s.widths[1] > 0); // b, never shown, gets one from its name
+});
+
+test("a column named __proto__ gets a width like any other", () => {
+  const s = newState();
+  applyMeta(s, meta(1, ["__proto__", "a"]));
+  fitWidths(s, [["x", "y"]]);
+  assert.ok(s.widths.every((w) => typeof w === "number" && w > 0));
+});
+
+test("the stats of the shown columns are in their order", () => {
+  const s = newState(view(["b"]));
+  applyMeta(s, meta(1));
+  const st = (name: string) => ({ name, type: "string", count: 1, nulls: 0, invalid: 0, unique: 1, uniqueApprox: false }) as Stats;
+  applyStats(s, 1, [st("a"), st("b"), st("c")]);
+  assert.deepEqual(s.stats.map((x) => x?.name), ["b"]);
+});
+
+test("a reload drops shown columns that are gone and shows new ones at the end", () => {
+  const s = newState(view(["c", "a"]));
+  applyMeta(s, meta(1)); // b is hidden
+  applyMeta(s, meta(2, ["a", "b", "d"])); // c gone, d new
+  assert.deepEqual(s.view.columns, ["a", "d"]);
+  assert.deepEqual(s.cols.map((c) => c.name), ["a", "d"]);
+});
+
+test("the first load does not show columns the link left out, and an empty list shows all", () => {
+  const s = newState(view(["b", "nope"]));
+  applyMeta(s, meta(1));
+  assert.deepEqual(s.view.columns, ["b"]);
+  const t = newState(view(["nope"]));
+  applyMeta(t, meta(1));
+  assert.equal(t.view.columns, null);
+  assert.equal(t.cols.length, 3);
 });

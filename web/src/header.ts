@@ -27,7 +27,7 @@ export function renderHeader() {
   const letters = mk("letters");
   const names = mk("names");
   const profile = mk("profile");
-  S.meta.columns.forEach((c, i) => {
+  S.cols.forEach((c, i) => {
     const lt = el("div", i >= c0 && i <= c1 ? "hl" : "", colLetter(i));
     lt.dataset.col = String(i);
     lt.title = `Select column ${colLetter(i)}`;

@@ -10,11 +10,23 @@
 import { estimateWidth, rownumWidth } from "./format.ts";
 import { emptyView } from "./hash.ts";
 import { first } from "./selection.ts";
-import type { Meta, Pos, Sort, Stats, ViewState } from "./types.ts";
+import type { Column, Meta, Pos, Sort, Stats, ViewState } from "./types.ts";
 
 export interface State {
   meta: Meta | null;
-  stats: Stats[];
+  // The columns shown and their order (view.columns over the meta's
+  // columns), and each one's position in the file. Display positions (the
+  // c of a Pos, colPop, widths and stats) index these; project sets them.
+  cols: Column[];
+  fileIdx: number[];
+  // allStats are the stats in file order; stats are those of the columns
+  // shown, in their order.
+  allStats: Stats[];
+  stats: (Stats | undefined)[];
+  // widthOf holds each column's width by name, so it follows the column when
+  // columns are hidden or moved; widths are those of the columns shown. A
+  // Map, since a column may be named "__proto__".
+  widthOf: Map<string, number>;
   widths: number[];
   // widthsPending is set when the columns changed, until the first rows
   // come and the widths are fitted to them (fitWidths).
@@ -46,7 +58,8 @@ export interface Flash { at: number | null; pending: boolean; seen: boolean }
 
 export function newState(view: ViewState = emptyView()): State {
   return {
-    meta: null, stats: [], widths: [], widthsPending: false, rownumW: 52, view, total: 0, epoch: 0,
+    meta: null, cols: [], fileIdx: [], allStats: [], stats: [], widthOf: new Map(), widths: [], widthsPending: false,
+    rownumW: 52, view, total: 0, epoch: 0,
     cur: { r: 0, c: 0 }, anchor: { r: 0, c: 0 },
     expanded: false, pinned: false, colPop: null, fullValue: null,
     histScale: "linear", numGroup: true, flash: { at: null, pending: false, seen: false },
@@ -60,7 +73,7 @@ export function newState(view: ViewState = emptyView()): State {
 // glow stay. The caller resets view.top when the query itself changed.
 export function newQuery(s: State) {
   s.epoch++;
-  s.cur = first(s.cur, s.meta?.columns.length ?? 1);
+  s.cur = first(s.cur, s.cols.length || 1);
   s.anchor = { ...s.cur };
   s.expanded = false;
   s.fullValue = null;
@@ -68,29 +81,71 @@ export function newQuery(s: State) {
 
 // applyMeta takes a new meta and starts the rows over. When the generation
 // changed, the glow of the last reload stops and the next waits for the new
-// rows; filters and the sort on columns that are gone are dropped; when the
-// columns changed, the stats are dropped, the widths wait for the first
-// rows (fitWidths) and the distribution popover closes. The stats of the
-// same columns stay until the new ones come (applyStats). It reports
-// whether the columns changed.
+// rows; filters, sort keys and shown columns that are gone are dropped, and
+// columns new since the last meta are shown at the end (a column the user
+// never hid is not hidden); when the columns changed, the stats are
+// dropped, the widths wait for the first rows (fitWidths) and the
+// distribution popover closes. The stats of the same columns stay until the
+// new ones come (applyStats). It reports whether the columns changed.
 export function applyMeta(s: State, m: Meta): { columnsChanged: boolean } {
   const columnsChanged = s.meta === null || JSON.stringify(s.meta.columns) !== JSON.stringify(m.columns);
   if (s.meta !== null && m.generation !== s.meta.generation) {
     s.flash = { at: null, pending: true, seen: true };
   }
+  const before = s.meta ? new Set(s.meta.columns.map((c) => c.name)) : null;
   s.meta = m;
   const names = new Set(m.columns.map((c) => c.name));
   s.view.filters = s.view.filters.filter((f) => names.has(f.column));
   s.view.sorts = s.view.sorts.filter((k) => names.has(k.column));
+  if (s.view.columns) {
+    const added = before ? m.columns.map((c) => c.name).filter((n) => !before.has(n)) : [];
+    s.view.columns = normalColumns(m, [...s.view.columns.filter((n) => names.has(n)), ...added]);
+  }
   if (columnsChanged) {
-    s.stats = [];
-    s.widths = m.columns.map((c) => estimateWidth(c));
+    s.allStats = [];
+    s.widthOf = new Map();
     s.widthsPending = true;
     s.colPop = null;
   }
   s.rownumW = rownumWidth(m.rows);
+  project(s);
   newQuery(s);
   return { columnsChanged };
+}
+
+// normalColumns is the view's columns for a list of names: null (every
+// column in file order) when the list is that, or empty.
+export function normalColumns(m: Meta, names: string[]): string[] | null {
+  const all = m.columns.map((c) => c.name);
+  if (names.length === 0 || JSON.stringify(names) === JSON.stringify(all)) return null;
+  return names;
+}
+
+// project sets the columns shown, their widths and stats from the meta and
+// view.columns. A column shown for the first time gets a width from its name
+// and type.
+export function project(s: State) {
+  if (!s.meta) return;
+  const all = s.meta.columns;
+  const pos = new Map(all.map((c, i) => [c.name, i]));
+  const order = s.view.columns ? s.view.columns.flatMap((n) => (pos.has(n) ? [pos.get(n)!] : [])) : all.map((_, i) => i);
+  s.fileIdx = order.length ? order : all.map((_, i) => i);
+  s.cols = s.fileIdx.map((i) => all[i]);
+  s.widths = s.cols.map((c) => {
+    if (!s.widthOf.has(c.name)) s.widthOf.set(c.name, estimateWidth(c));
+    return s.widthOf.get(c.name)!;
+  });
+  s.stats = s.allStats.length ? s.fileIdx.map((i) => s.allStats[i]) : [];
+}
+
+// setColumns shows the named columns in that order (null: every column). The
+// distribution popover closes and the selection stays within the columns;
+// the caller starts the rows over, since they come in the shown columns.
+export function setColumns(s: State, names: string[] | null) {
+  if (!s.meta) return;
+  s.view.columns = names && normalColumns(s.meta, names);
+  s.colPop = null;
+  project(s);
 }
 
 // applyStats takes the stats of a generation, which come after the meta on
@@ -98,17 +153,20 @@ export function applyMeta(s: State, m: Meta): { columnsChanged: boolean } {
 // generation than the meta's are dropped.
 export function applyStats(s: State, generation: number, stats: Stats[]): boolean {
   if (s.meta?.generation !== generation) return false;
-  s.stats = stats;
+  s.allStats = stats;
+  project(s);
   return true;
 }
 
-// fitWidths fits the column widths to the first rows shown after the
-// columns changed; later rows and the stats leave them, so the table does
-// not shift under the reader. It reports whether the widths were set.
+// fitWidths fits the widths of the columns shown to the first rows shown
+// after the columns changed (rows come in the shown columns); later rows and
+// the stats leave them, so the table does not shift under the reader. It
+// reports whether the widths were set.
 export function fitWidths(s: State, rows: string[][]): boolean {
   if (!s.widthsPending || !s.meta) return false;
-  s.widths = s.meta.columns.map((c, i) => estimateWidth(c, rows.map((r) => r[i] ?? "")));
+  s.cols.forEach((c, i) => s.widthOf.set(c.name, estimateWidth(c, rows.map((r) => r[i] ?? ""))));
   s.widthsPending = false;
+  project(s);
   return true;
 }
 
