@@ -35,11 +35,14 @@ export function renderHeader() {
 
     const nm = el("div", isNum(c.type) ? "num" : "");
     nm.dataset.sort = c.name;
-    nm.title = `${c.name} (${c.type}): click to sort`;
+    nm.title = `${c.name} (${c.type}): click to sort, Shift-click to add a sort key`;
     nm.appendChild(el("span", "nm", c.name));
-    if (S.view.sort?.column === c.name) {
+    const k = S.view.sorts.findIndex((s) => s.column === c.name);
+    if (k >= 0) {
       const a = el("span", "arrow");
-      a.appendChild(icon(S.view.sort.desc ? "arrow-down" : "arrow-up", 12));
+      a.appendChild(icon(S.view.sorts[k].desc ? "arrow-down" : "arrow-up", 12));
+      // The keys' order shows when there is more than one.
+      if (S.view.sorts.length > 1) a.appendChild(el("span", "prio", String(k + 1)));
       nm.appendChild(a);
     }
     if (S.view.filters.some((f) => f.column === c.name)) {

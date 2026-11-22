@@ -49,6 +49,27 @@ test("sorts ascending, descending, then not at all", async ({ page, serve }) => 
   await expect.poll(() => column(page, 0, 3)).toEqual(["1", "2", "3"]);
 });
 
+test("sorts by several columns with Shift-click", async ({ page, serve }) => {
+  const xxsv = await serve("t.csv", "id,g,v\n1,b,2\n2,a,2\n3,b,1\n4,a,1\n5,a,\n");
+  await open(page, xxsv.url);
+  const g = page.locator('[data-sort="g"]'), v = page.locator('[data-sort="v"]');
+  await g.click();
+  await v.click({ modifiers: ["Shift"] });
+  await expect(g.locator(".prio")).toHaveText("1");
+  await expect(v.locator(".prio")).toHaveText("2");
+  // a before b; within each, v ascending with the missing cell last.
+  await expect.poll(() => column(page, 0, 5)).toEqual(["4", "2", "5", "3", "1"]);
+  await v.click({ modifiers: ["Shift"] }); // the second key turns descending
+  await expect.poll(() => column(page, 0, 5)).toEqual(["2", "4", "5", "1", "3"]);
+  await v.click({ modifiers: ["Shift"] }); // and goes, leaving the first
+  await expect(v.locator(".arrow")).toHaveCount(0);
+  await expect(g.locator(".prio")).toHaveCount(0); // one key: no number
+  await expect.poll(() => column(page, 0, 5)).toEqual(["2", "4", "5", "1", "3"]);
+  await v.click(); // a plain click sorts by that column alone
+  await expect(g.locator(".arrow")).toHaveCount(0);
+  await expect.poll(() => column(page, 0, 5)).toEqual(["3", "4", "1", "2", "5"]);
+});
+
 test("searches all cells", async ({ page, serve }) => {
   const xxsv = await serve("t.csv", csv(200));
   await open(page, xxsv.url);

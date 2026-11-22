@@ -10,7 +10,7 @@
 import { estimateWidth, rownumWidth } from "./format.ts";
 import { emptyView } from "./hash.ts";
 import { first } from "./selection.ts";
-import type { Meta, Pos, Stats, ViewState } from "./types.ts";
+import type { Meta, Pos, Sort, Stats, ViewState } from "./types.ts";
 
 export interface State {
   meta: Meta | null;
@@ -81,7 +81,7 @@ export function applyMeta(s: State, m: Meta): { columnsChanged: boolean } {
   s.meta = m;
   const names = new Set(m.columns.map((c) => c.name));
   s.view.filters = s.view.filters.filter((f) => names.has(f.column));
-  if (s.view.sort && !names.has(s.view.sort.column)) s.view.sort = null;
+  s.view.sorts = s.view.sorts.filter((k) => names.has(k.column));
   if (columnsChanged) {
     s.stats = [];
     s.widths = m.columns.map((c) => estimateWidth(c));
@@ -110,6 +110,22 @@ export function fitWidths(s: State, rows: string[][]): boolean {
   s.widths = s.meta.columns.map((c, i) => estimateWidth(c, rows.map((r) => r[i] ?? "")));
   s.widthsPending = false;
   return true;
+}
+
+// MAX_SORT_KEYS is the server's limit on sort keys.
+export const MAX_SORT_KEYS = 5;
+
+// nextSorts is the sort keys after a click on a column name (cycleSort). A
+// Shift-click past the limit leaves the keys as they are.
+export function nextSorts(sorts: Sort[], column: string, add: boolean): Sort[] {
+  const i = sorts.findIndex((k) => k.column === column);
+  if (!add) {
+    if (sorts.length !== 1 || i !== 0) return [{ column }];
+    return sorts[0].desc ? [] : [{ column, desc: true }];
+  }
+  if (i < 0) return sorts.length >= MAX_SORT_KEYS ? sorts : [...sorts, { column }];
+  if (!sorts[i].desc) return sorts.map((k, j) => (j === i ? { column, desc: true } : k));
+  return sorts.filter((_, j) => j !== i);
 }
 
 // rowsShown is called when a block of the current epoch is stored: the

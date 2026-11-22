@@ -51,7 +51,7 @@ function setup() {
       return;
     }
     const nm = t.closest<HTMLElement>("[data-sort]");
-    if (nm) return cycleSort(nm.dataset.sort!);
+    if (nm) return cycleSort(nm.dataset.sort!, e.shiftKey);
     // The hatched missing part of a distribution filters to missing cells.
     const miss = t.closest<HTMLElement>("[data-missing]");
     if (miss) return toggleMissing(S.meta.columns[Number(miss.dataset.missing)].name);

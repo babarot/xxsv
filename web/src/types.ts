@@ -44,8 +44,9 @@ export interface RowsResponse {
 export interface Aggregate { generation: number; count: number; numericCount: number; sum?: number; avg?: number; min?: number; max?: number }
 
 // ViewState is what the URL hash keeps: the query and the scroll position
-// (the first row shown, in the filtered, sorted order).
-export interface ViewState { search: string; filters: Filter[]; sort: Sort | null; top: number }
+// (the first row shown, in the filtered, sorted order). sorts are the sort
+// keys, compared in order.
+export interface ViewState { search: string; filters: Filter[]; sorts: Sort[]; top: number }
 
 // Pos is a display position: a row in the filtered, sorted order, and a column.
 export interface Pos { r: number; c: number }

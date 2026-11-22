@@ -105,18 +105,18 @@ func TestAPI(t *testing.T) {
 		t.Errorf("stats: %+v", st)
 	}
 
-	code, r := postRows(t, base, `{"sort":{"column":"id","desc":true},"limit":2}`)
+	code, r := postRows(t, base, `{"sorts":[{"column":"id","desc":true}],"limit":2}`)
 	if code != 200 || r.Total != 3 || len(r.Rows) != 2 || r.Rows[0][1] != "carol" || r.Generation != 1 {
 		t.Errorf("rows: %d %+v", code, r)
 	}
-	if code, _ := postRows(t, base, `{"sort":{"column":"nope"}}`); code != 400 {
+	if code, _ := postRows(t, base, `{"sorts":[{"column":"nope"}]}`); code != 400 {
 		t.Errorf("bad sort column: %d", code)
 	}
 	if code, _ := postRows(t, base, `{"bogus":1}`); code != 400 {
 		t.Errorf("unknown field: %d", code)
 	}
 
-	agg, err := http.Post(base+"/api/aggregate", "application/json", strings.NewReader(`{"sort":{"column":"id","desc":true},"r0":0,"r1":1,"c0":0,"c1":1}`))
+	agg, err := http.Post(base+"/api/aggregate", "application/json", strings.NewReader(`{"sorts":[{"column":"id","desc":true}],"r0":0,"r1":1,"c0":0,"c1":1}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +359,7 @@ func TestChanges(t *testing.T) {
 		t.Errorf("file order: changed %v, added %v", r.Changed, r.Added)
 	}
 	// Sorted by id descending: 9 (added), 4, 3 (changed), 2.
-	_, r = postRows(t, srv.URL, `{"sort":{"column":"id","desc":true}}`)
+	_, r = postRows(t, srv.URL, `{"sorts":[{"column":"id","desc":true}]}`)
 	if fmt.Sprint(r.RowIDs) != "[3 2 1 0]" || fmt.Sprint(r.Changed) != "[[2 1]]" || fmt.Sprint(r.Added) != "[0]" {
 		t.Errorf("sorted: rows %v, changed %v, added %v", r.RowIDs, r.Changed, r.Added)
 	}

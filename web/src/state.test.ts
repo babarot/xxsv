@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyMeta, applyStats, fitWidths, flashElapsed, newQuery, newState, rowsShown } from "./state.ts";
+import { MAX_SORT_KEYS, applyMeta, applyStats, fitWidths, flashElapsed, newQuery, newState, nextSorts, rowsShown } from "./state.ts";
 import type { Meta, Stats } from "./types.ts";
 
 const meta = (generation: number, columns = ["a", "b", "c"]): Meta => ({
@@ -70,7 +70,7 @@ test("the same generation again leaves the glow alone but still starts the rows 
 });
 
 test("changed columns close the distribution popover and drop filters and the sort on missing columns", () => {
-  const s = newState({ search: "", filters: [{ column: "b", op: "contains", value: "x" }, { column: "a", op: "null" }], sort: { column: "b" }, top: 5 });
+  const s = newState({ search: "", filters: [{ column: "b", op: "contains", value: "x" }, { column: "a", op: "null" }], sorts: [{ column: "a" }, { column: "b" }], top: 5 });
   applyMeta(s, meta(1));
   s.colPop = 2;
   s.cur = { r: 3, c: 2 };
@@ -78,7 +78,7 @@ test("changed columns close the distribution popover and drop filters and the so
   assert.equal(columnsChanged, true);
   assert.equal(s.colPop, null);
   assert.deepEqual(s.view.filters, [{ column: "a", op: "null" }]);
-  assert.equal(s.view.sort, null);
+  assert.deepEqual(s.view.sorts, [{ column: "a" }]);
   assert.equal(s.view.top, 5); // the scroll position stays
   assert.deepEqual(s.cur, { r: 0, c: 1 }); // the column is kept within the new columns
   assert.equal(s.widths.length, 2);
@@ -112,4 +112,20 @@ test("stats are taken for the meta's generation only, and dropped with the colum
   assert.equal(s.stats, st);
   applyMeta(s, meta(4, ["a", "z"]));
   assert.deepEqual(s.stats, []);
+});
+
+test("a click sorts by the column alone: ascending, descending, off", () => {
+  assert.deepEqual(nextSorts([], "a", false), [{ column: "a" }]);
+  assert.deepEqual(nextSorts([{ column: "a" }], "a", false), [{ column: "a", desc: true }]);
+  assert.deepEqual(nextSorts([{ column: "a", desc: true }], "a", false), []);
+  // Other keys go; a column that was a later key starts ascending, alone.
+  assert.deepEqual(nextSorts([{ column: "a" }, { column: "b", desc: true }], "b", false), [{ column: "b" }]);
+});
+
+test("a Shift-click adds a key, or cycles its own key, keeping the others", () => {
+  assert.deepEqual(nextSorts([{ column: "a" }], "b", true), [{ column: "a" }, { column: "b" }]);
+  assert.deepEqual(nextSorts([{ column: "a" }, { column: "b" }], "a", true), [{ column: "a", desc: true }, { column: "b" }]);
+  assert.deepEqual(nextSorts([{ column: "a", desc: true }, { column: "b" }], "a", true), [{ column: "b" }]);
+  const full = Array.from({ length: MAX_SORT_KEYS }, (_, i) => ({ column: "c" + i }));
+  assert.deepEqual(nextSorts(full, "z", true), full);
 });

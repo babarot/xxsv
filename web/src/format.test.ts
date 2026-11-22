@@ -66,10 +66,10 @@ test("changeSummary says what a reload changed", () => {
 
 test("viewSentence describes the view", () => {
   const meta = { rows: 1000, columns: [{ name: "q", type: "integer" }] } as Meta;
-  assert.equal(viewSentence(meta, 1000, { search: "", filters: [], sort: null, top: 0 }), "1,000 of 1,000 rows.");
+  assert.equal(viewSentence(meta, 1000, { search: "", filters: [], sorts: [], top: 0 }), "1,000 of 1,000 rows.");
   assert.equal(
-    viewSentence(meta, 12, { search: "ab", filters: [{ column: "q", op: "range", min: "1", max: "2" }], sort: { column: "q", desc: true }, top: 0 }),
-    "12 of 1,000 rows, matching “ab”, where q 1 – 2, sorted by q descending.",
+    viewSentence(meta, 12, { search: "ab", filters: [{ column: "q", op: "range", min: "1", max: "2" }], sorts: [{ column: "q", desc: true }, { column: "r" }], top: 0 }),
+    "12 of 1,000 rows, matching “ab”, where q 1 – 2, sorted by q descending, then r ascending.",
   );
 });
 

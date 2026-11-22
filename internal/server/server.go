@@ -343,11 +343,11 @@ func (s *Server) handleRows(w http.ResponseWriter, r *http.Request) {
 }
 
 // AggregateRequest is the body of POST /api/aggregate: the same search,
-// filters and sort as /api/rows, and the range of cells in that order.
+// filters and sort keys as /api/rows, and the range of cells in that order.
 type AggregateRequest struct {
 	Search  string         `json:"search,omitempty"`
 	Filters []query.Filter `json:"filters,omitempty"`
-	Sort    *query.Sort    `json:"sort,omitempty"`
+	Sorts   []query.Sort   `json:"sorts,omitempty"`
 	query.Range
 }
 
@@ -360,7 +360,7 @@ func (s *Server) handleAggregate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	snap := s.cur.Load()
-	agg, err := snap.engine.Aggregate(query.Query{Search: req.Search, Filters: req.Filters, Sort: req.Sort}, req.Range)
+	agg, err := snap.engine.Aggregate(query.Query{Search: req.Search, Filters: req.Filters, Sorts: req.Sorts}, req.Range)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, query.ErrBadQuery) {

@@ -37,7 +37,7 @@ test("describes the view, copies a link to it, and lists the file", async ({ pag
   await expect(page.locator("#about-list")).toContainText("t.csv");
   await page.locator("#copy-link").click();
   const link = await page.evaluate(() => navigator.clipboard.readText());
-  expect(JSON.parse(decodeURIComponent(new URL(link).hash.slice(1))).sort).toEqual({ column: "qty" });
+  expect(JSON.parse(decodeURIComponent(new URL(link).hash.slice(1))).sorts).toEqual([{ column: "qty" }]);
 });
 
 test("turns digit grouping off and on, and keeps the choice across a reload", async ({ page, serve }) => {

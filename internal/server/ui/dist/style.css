@@ -179,7 +179,8 @@ button { font: inherit; color: inherit; }
 .names .nm { overflow: hidden; text-overflow: ellipsis; }
 .names .typ { margin-left: auto; padding-left: 4px; }
 .names .arrow, .names .fmark { display: inline-flex; flex: none; }
-.names .arrow { color: var(--text-muted); }
+.names .arrow { color: var(--text-muted); align-items: center; }
+.names .prio { font: 600 9px var(--mono); margin-left: 1px; }
 .names .fmark { color: var(--accent); }
 .profile > div { height: var(--prof-h); padding: 4px 8px; border-bottom-color: var(--border-strong) !important; cursor: pointer; }
 .profile > div:hover, .profile > div.open { background: var(--accent-soft) !important; box-shadow: inset 0 -2px 0 var(--accent); }
