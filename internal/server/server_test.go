@@ -449,3 +449,25 @@ func TestValuesAPI(t *testing.T) {
 	}
 	bad.Body.Close()
 }
+
+func TestRowAPI(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.csv")
+	long := strings.Repeat("é", rowCellBytes) // 2 bytes each: cut
+	writeFile(t, path, "a,b,c\nx,,"+long+"\n")
+	_, base := start(t, path)
+	var r struct {
+		Generation uint64
+		Cells      []RowCell
+	}
+	if code := getJSON(t, base+"/api/row?gen=1&row=0", &r); code != 200 {
+		t.Fatalf("row: %d", code)
+	}
+	if len(r.Cells) != 3 || r.Cells[0].Value != "x" || !r.Cells[1].Null || !r.Cells[2].Cut || len(r.Cells[2].Value) != rowCellBytes {
+		t.Errorf("cells: %+v", r.Cells[:2])
+	}
+	for url, want := range map[string]int{"/api/row?gen=2&row=0": 409, "/api/row?gen=1&row=5": 404, "/api/row?gen=x": 400} {
+		if code := getJSON(t, base+url, nil); code != want {
+			t.Errorf("%s: %d, want %d", url, code, want)
+		}
+	}
+}

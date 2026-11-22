@@ -16,11 +16,19 @@ import { exportMenuOpen, renderExportMenu, toggleExportMenu } from "./export-men
 import { wireValuesPanel } from "./values-panel.ts";
 import { filterBySelected, renderSelectionInfo } from "./cell-popover.ts";
 import { $, copyText } from "./dom.ts";
-import { grid, isLong, scheduleRender } from "./grid.ts";
+import { grid, isLong, render, scheduleRender } from "./grid.ts";
 import { renderHeader } from "./header.ts";
 import { histScale, numGroup, toggleSettings, wireChoices } from "./settings.ts";
 import { connect } from "./live.ts";
 import { showError } from "./status.ts";
+
+// toggleRow shows the selected cell's row in the side panel, or closes it.
+function toggleRow() {
+  S.panel = S.panel === "row" ? null : "row";
+  S.expanded = false;
+  render();
+  renderSelectionInfo();
+}
 
 function setup() {
   hydrateIcons();
@@ -119,6 +127,9 @@ function setup() {
     } else if (e.key in moves) {
       e.preventDefault();
       moveBy(...moves[e.key], e.shiftKey);
+    } else if (e.key === "Enter" && !(t instanceof HTMLButtonElement)) {
+      e.preventDefault();
+      toggleRow();
     } else if (e.key === " ") {
       e.preventDefault();
       if (isLong(S.cur) && S.panel !== "cell") {
@@ -129,6 +140,7 @@ function setup() {
   });
 
   $("fbar-filter").addEventListener("click", filterBySelected);
+  $("fbar-row").addEventListener("click", toggleRow);
   $("cols-btn").addEventListener("click", () => toggleColumnsMenu());
   $("export-btn").addEventListener("click", () => toggleExportMenu());
   wireValuesPanel();

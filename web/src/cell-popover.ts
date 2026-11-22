@@ -10,6 +10,7 @@ import { S, setFilter } from "./app.ts";
 import { $, copyText, el } from "./dom.ts";
 import { cellAt, isLong, render } from "./grid.ts";
 import { openValues } from "./values-panel.ts";
+import { renderRowPanel } from "./row-panel.ts";
 
 // renderSelectionInfo fills the formula bar, the cell popover and the pinned
 // panel for the active cell, fetching the full value of a cut cell.
@@ -68,7 +69,7 @@ export function renderSelectionInfo() {
   const ready = !cell.cut || full !== null;
   renderFbarFilter(col, cell, value, ready);
   renderPeek(col, cell, value, ready);
-  renderPinPanel(S.panel === "cell" ? { col, cell, value, ready } : null);
+  renderPinPanel({ col, cell, value, ready });
 }
 
 export function valueBlock(col: Column, cell: CellInfo, value: string, ready: boolean, mode: "peek" | "pin") {
@@ -123,8 +124,8 @@ export function renderPeek(col: Column, cell: CellInfo, value: string, ready: bo
   positionPopovers();
 }
 
-// renderPinPanel draws the side panel when it shows the selected cell; the
-// values tab draws itself (values-panel.ts).
+// renderPinPanel draws the side panel when it shows the selected cell or its
+// row; the values tab draws itself (values-panel.ts).
 export function renderPinPanel(info: { col: Column; cell: CellInfo; value: string; ready: boolean } | null) {
   const panel = $("pinpanel");
   if (S.panel === null) {
@@ -132,6 +133,7 @@ export function renderPinPanel(info: { col: Column; cell: CellInfo; value: strin
     return;
   }
   panel.hidden = false;
+  if (S.panel === "row") return renderRowPanel(info?.cell ?? null);
   if (S.panel !== "cell") return;
   const body = info ? valueBlock(info.col, info.cell, info.value, info.ready, "pin") : el("div", "dim", "Loading…");
   panel.replaceChildren(panelTabs(), body);
@@ -141,7 +143,7 @@ export function renderPinPanel(info: { col: Column; cell: CellInfo; value: strin
 // a column (the selected cell's column, unless one was chosen).
 export function panelTabs() {
   const tabs = el("div", "ptabs");
-  const tab = (p: "cell" | "values", label: string) => {
+  const tab = (p: "cell" | "row" | "values", label: string) => {
     const b = el("button", S.panel === p ? "on" : "", label) as HTMLButtonElement;
     b.dataset.panel = p;
     b.addEventListener("click", () => {
@@ -152,7 +154,7 @@ export function panelTabs() {
     });
     return b;
   };
-  tabs.append(tab("cell", "Cell"), tab("values", "Values"));
+  tabs.append(tab("cell", "Cell"), tab("row", "Row"), tab("values", "Values"));
   const close = el("button", "btn-icon") as HTMLButtonElement;
   close.title = "Close the side panel";
   close.setAttribute("aria-label", close.title);

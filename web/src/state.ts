@@ -41,7 +41,7 @@ export interface State {
   anchor: Pos;
   expanded: boolean; // the cell popover is open
   // panel is what the side panel shows: the selected cell (the cell popover
-  // pinned to the side), a column's values, or nothing (closed).
+  // pinned to the side), its row, a column's values, or nothing (closed).
   panel: Panel;
   valuesCol: string | null; // the column whose values the panel lists
   colPop: number | null; // column whose distribution popover is open
@@ -57,7 +57,7 @@ export interface State {
 // meta. pending is set when a reload is seen, until those rows arrive. seen
 // shows the summary. All stay unset on the first load and after a browser
 // reload: nothing glows, and no summary is shown.
-export type Panel = "cell" | "values" | null;
+export type Panel = "cell" | "row" | "values" | null;
 
 export interface Flash { at: number | null; pending: boolean; seen: boolean }
 

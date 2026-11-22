@@ -183,6 +183,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/stats", s.handleStats)
 	mux.HandleFunc("POST /api/rows", s.handleRows)
 	mux.HandleFunc("GET /api/cell", s.handleCell)
+	mux.HandleFunc("GET /api/row", s.handleRow)
 	mux.HandleFunc("POST /api/values", s.handleValues)
 	mux.HandleFunc("POST /api/export", s.handleExportStart)
 	mux.HandleFunc("GET /api/export/{token}", s.handleExportDownload)
@@ -446,6 +447,51 @@ func (s *Server) handleCell(w http.ResponseWriter, r *http.Request) {
 		Value      string `json:"value"`
 		Null       bool   `json:"null"`
 	}{snap.gen, c.Raw[row], c.IsMissing(row)})
+}
+
+// rowCellBytes cuts each value of /api/row; the page fetches the whole of a
+// longer one with /api/cell.
+const rowCellBytes = 64 << 10
+
+// RowCell is one value of a row in /api/row.
+type RowCell struct {
+	Value string `json:"value"`
+	Null  bool   `json:"null,omitempty"`
+	Cut   bool   `json:"cut,omitempty"`
+}
+
+// handleRow returns every value of one row, in file order, each cut to
+// rowCellBytes.
+func (s *Server) handleRow(w http.ResponseWriter, r *http.Request) {
+	snap := s.cur.Load()
+	qs := r.URL.Query()
+	gen, err1 := strconv.ParseUint(qs.Get("gen"), 10, 64)
+	row, err2 := strconv.Atoi(qs.Get("row"))
+	if err := errors.Join(err1, err2); err != nil {
+		writeError(w, http.StatusBadRequest, "gen and row must be numbers")
+		return
+	}
+	if gen != snap.gen {
+		writeError(w, http.StatusConflict, fmt.Sprintf("generation %d is gone; the file was reloaded (now %d)", gen, snap.gen))
+		return
+	}
+	t := snap.table
+	if row < 0 || row >= t.Rows {
+		writeError(w, http.StatusNotFound, "no such row")
+		return
+	}
+	cells := make([]RowCell, len(t.Columns))
+	for i, c := range t.Columns {
+		v := c.Raw[row]
+		cells[i] = RowCell{Value: v, Null: c.IsMissing(row)}
+		if len(v) > rowCellBytes {
+			cells[i].Value, cells[i].Cut = query.Cut(v, rowCellBytes), true
+		}
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Generation uint64    `json:"generation"`
+		Cells      []RowCell `json:"cells"`
+	}{snap.gen, cells})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

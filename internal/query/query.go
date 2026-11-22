@@ -222,6 +222,9 @@ func (e *Engine) Columns(names []string) ([]int, error) {
 	return cols, nil
 }
 
+// Cut shortens s to at most n bytes without splitting a character.
+func Cut(s string, n int) string { return cut(s, n) }
+
 // cut shortens s to at most n bytes without splitting a character.
 func cut(s string, n int) string {
 	for n > 0 && !utf8.RuneStart(s[n]) {
