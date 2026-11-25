@@ -27,6 +27,7 @@ The name, xxsv (ex-ex-es-vee), stands for eXtended [xsv](https://github.com/Burn
 - Export what you see, every matching row in the shown columns and order, as CSV, TSV or JSONL.
 - Types. Each column is read as integer, number, date, datetime, boolean, string or JSON, so numbers sort as numbers and dates filter by range. Missing cells and cells that do not fit the column's type are told apart and can be filtered.
 - Long values. JSON and long text open in a popover next to the cell, pretty-printed, or in a side panel.
+- Images. A cell that holds the path of an image file, or a `data:` image, shows it small beside the text; point at it for a larger one. Images on the web are not loaded.
 - One binary, local only. The UI is built in, and the page talks to nothing but xxsv on 127.0.0.1.
 
 ## Install
@@ -108,6 +109,8 @@ A cell is then one of three things:
 - invalid: text that is not a value of the type, such as `pending` in a number column. Invalid cells are underlined in the table, counted apart from missing ones, and sort after the values.
 
 Datetimes without a time zone are shown as written. When a column has times with zones, they are shown in UTC.
+
+In a string column, a path that ends in `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp` or `.bmp` is shown as an image when there is one. An absolute path may be anywhere; a relative one starts at the table's directory and stays inside it. The file's content must be an image of one of these types. A base64 `data:image/...` URL is shown the same way; other URLs are left as text.
 
 JSONL lines become rows and their top-level keys become columns. Files whose lines use many different keys keep the 1,000 most common as columns and fold the rest into an `(other keys)` column.
 

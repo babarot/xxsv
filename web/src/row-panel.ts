@@ -4,6 +4,7 @@
 import { NULL_MARK, TYPE_ABBR } from "./constants.ts";
 import { fmt, pretty } from "./format.ts";
 import { icon } from "./icons.ts";
+import { cellImage } from "./image.ts";
 import type { CellInfo } from "./rows.ts";
 import { S, setFilter } from "./app.ts";
 import { api } from "./api.ts";
@@ -77,7 +78,8 @@ function draw(rowId: number, cells: RowCell[]) {
     f.addEventListener("click", () => setFilter(col.name, missing ? { column: col.name, op: "null" } : { column: col.name, op: "equals", value: c.value }));
     k.appendChild(f);
     const v = el("div", "v" + (missing ? " null" : ""), missing ? `${NULL_MARK} (missing)` : pretty(c?.value ?? "", col.type));
-    item.append(k, v);
+    const image = missing || !c ? null : cellImage({ value: c.value, type: col.type, gen: S.meta.generation, rowId, fileCol: fi });
+    item.append(k, ...(image ? [image] : []), v);
     list.appendChild(item);
   }
   panel.replaceChildren(panelTabs(), head, list);

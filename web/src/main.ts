@@ -17,7 +17,8 @@ import { wireValuesPanel } from "./values-panel.ts";
 import { wireSearch } from "./search.ts";
 import { filterBySelected, renderSelectionInfo } from "./cell-popover.ts";
 import { $, copyText } from "./dom.ts";
-import { grid, isLong, render, scheduleRender } from "./grid.ts";
+import { wireThumbs } from "./thumbs.ts";
+import { grid, hasMore, render, scheduleRender } from "./grid.ts";
 import { renderHeader } from "./header.ts";
 import { histScale, numGroup, toggleSettings, wireChoices } from "./settings.ts";
 import { connect } from "./live.ts";
@@ -78,13 +79,14 @@ function setup() {
     // A double-click opens the cell popover. The first click rebuilt the
     // rows, so the second lands on a new element and no dblclick event
     // fires; the click's detail still counts it.
-    if (e.detail === 2 && !e.shiftKey && isLong(S.cur)) {
+    if (e.detail === 2 && !e.shiftKey && hasMore(S.cur)) {
       S.expanded = true;
       renderSelectionInfo();
     }
   });
   g.addEventListener("scroll", scheduleRender, { passive: true });
   window.addEventListener("resize", scheduleRender);
+  wireThumbs(g);
   // A click outside the distribution popover closes it. The event's path is
   // taken at dispatch: a click on a filter button re-renders the popover and
   // detaches the target before this runs.
@@ -124,7 +126,7 @@ function setup() {
       toggleRow();
     } else if (e.key === " ") {
       e.preventDefault();
-      if (isLong(S.cur) && S.panel !== "cell") {
+      if (hasMore(S.cur) && S.panel !== "cell") {
         S.expanded = !S.expanded;
         renderSelectionInfo();
       }

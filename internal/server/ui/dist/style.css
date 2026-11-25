@@ -270,6 +270,19 @@ button { font: inherit; color: inherit; }
 .actions .btn-ghost { height: 26px; color: var(--text); gap: 5px; }
 #pinpanel { width: 320px; flex: none; border-left: 1px solid var(--border); background: var(--bg); overflow: auto; padding: 14px; }
 #pinpanel .vb-pre { max-height: none; }
+/* A cell's small image; its row keeps the height of any other. */
+.thumb { display: inline-block; width: 28px; height: 20px; margin-right: 6px; vertical-align: middle; line-height: 0; border-radius: 3px; overflow: hidden; background: var(--surface-2); }
+.thumb.off { display: none; }
+.thumb canvas { width: 100%; height: 100%; }
+.thumb canvas[hidden] { display: none; }
+#imgzoom { padding: 6px; pointer-events: none; }
+#imgzoom img { display: block; border-radius: 6px; object-fit: contain; background: var(--surface-2); }
+#imgzoom .dim { font-size: 11px; margin-top: 4px; }
+.cellimg { margin: 4px 0 8px; }
+.cellimg img { display: block; max-width: 100%; max-height: 260px; border-radius: 6px; background: var(--surface-2); }
+.cellimg .dim { font-size: 11px; }
+/* Under an image, the text is a path or a data: URL, which can be huge. */
+#pinpanel .cellimg + .vb-pre, #pinpanel .cellimg + .v { max-height: 90px; overflow: auto; }
 
 /* ---- side panel tabs and the value list ---- */
 .ptabs { display: flex; align-items: center; gap: 2px; margin: -4px 0 12px; border-bottom: 1px solid var(--border); }

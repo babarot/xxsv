@@ -2,13 +2,14 @@
 import { NULL_MARK } from "./constants.ts";
 import { colLetter, fmt, pretty } from "./format.ts";
 import { icon } from "./icons.ts";
+import { cellImage } from "./image.ts";
 import type { CellInfo } from "./rows.ts";
 import { nameBox } from "./selection.ts";
 import type { Column } from "./types.ts";
 import { api } from "./api.ts";
 import { S, setFilter } from "./app.ts";
 import { $, copyText, el } from "./dom.ts";
-import { cellAt, isLong, render } from "./grid.ts";
+import { cellAt, hasMore, render } from "./grid.ts";
 import { openValues } from "./values-panel.ts";
 import { renderRowPanel } from "./row-panel.ts";
 
@@ -109,13 +110,14 @@ export function valueBlock(col: Column, cell: CellInfo, value: string, ready: bo
     });
     actions.appendChild(pin);
   }
-  box.append(head, pre, actions);
+  const image = cellImage({ value, type: col.type, gen: S.meta!.generation, rowId: cell.rowId, fileCol: S.fileIdx[S.cur.c] }, { onLoad: positionPopovers, note: true });
+  box.append(head, ...(image ? [image] : []), pre, actions);
   return box;
 }
 
 export function renderPeek(col: Column, cell: CellInfo, value: string, ready: boolean) {
   const peek = $("peek");
-  if (!S.expanded || S.panel === "cell" || !isLong(S.cur)) {
+  if (!S.expanded || S.panel === "cell" || !hasMore(S.cur)) {
     peek.hidden = true;
     return;
   }

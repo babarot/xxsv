@@ -1,7 +1,7 @@
 // The table body: virtual scrolling (scroll.ts does the math) and drawing
 // the rows in view, with the selection and the glow of the last reload.
 import { BLOCK, FLASH_MS, LONG_CHARS, NULL_MARK } from "./constants.ts";
-import { fmt, groupDigits, invalidText, isNum } from "./format.ts";
+import { fmt, groupDigits, imageKind, invalidText, isNum } from "./format.ts";
 import { writeHash } from "./hash.ts";
 import { icon } from "./icons.ts";
 import { blockOf } from "./rows.ts";
@@ -13,6 +13,7 @@ import { positionPopovers } from "./cell-popover.ts";
 import { $, el } from "./dom.ts";
 import { gridTemplate } from "./header.ts";
 import { renderCounts } from "./status.ts";
+import { thumb } from "./thumbs.ts";
 
 export const grid = () => $("grid");
 
@@ -47,13 +48,13 @@ export function scheduleRender() {
 
 export const cellAt = (p: Pos) => (S.meta ? rows.cell(p) : null);
 
-// isLong reports whether a cell is cut in the table: JSON, cut by the
-// server, or text past LONG_CHARS.
-export function isLong(p: Pos) {
+// hasMore reports whether a cell has more to show than fits the table: JSON,
+// cut by the server, text past LONG_CHARS, or an image.
+export function hasMore(p: Pos) {
   const cell = cellAt(p);
   if (!cell || cell.value === "" || !S.meta) return false;
   const t = S.cols[p.c].type;
-  return t === "json" || cell.cut || (!isNum(t) && cell.value.length > LONG_CHARS);
+  return t === "json" || cell.cut || (!isNum(t) && cell.value.length > LONG_CHARS) || imageKind(cell.value, t) !== null;
 }
 
 export function render() {
@@ -109,6 +110,8 @@ export function render() {
       cell.dataset.c = String(c);
       if (v === "") cell.classList.add("null");
       if (block.cut.has(`${r},${c}`)) cell.classList.add("cut");
+      const small = thumb({ value: v, type: t, gen: S.meta!.generation, rowId: block.rowIds[r], fileCol: S.fileIdx[c] }, cols[c].name, scheduleRender);
+      if (small) cell.prepend(small);
       if (bad) {
         cell.classList.add("bad");
         cell.title = `${invalidText(t)} in a ${t} column`;
@@ -117,7 +120,7 @@ export function render() {
       if (i >= r0 && i <= r1 && c >= c0 && c <= c1) cell.classList.add("inr");
       if (i === S.cur.r && c === S.cur.c) {
         cell.classList.add("cur");
-        if (S.panel !== "cell" && isLong({ r: i, c })) {
+        if (S.panel !== "cell" && hasMore({ r: i, c })) {
           const x = el("button", "xmark") as HTMLButtonElement;
           x.title = "Show the full value (Space, or double-click)";
           x.setAttribute("aria-label", "Show the full value");

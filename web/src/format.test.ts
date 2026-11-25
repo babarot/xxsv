@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { abbr, binLabel, changeSummary, colLetter, edgeLabel, estimateWidth, filterText, groupDigits, pretty, viewSentence } from "./format.ts";
+import { abbr, binLabel, changeSummary, colLetter, edgeLabel, estimateWidth, filterText, groupDigits, imageKind, pretty, viewSentence } from "./format.ts";
 import type { Changes, Meta, Stats } from "./types.ts";
 
 test("groupDigits groups integers in their text, exact past 2^53", () => {
@@ -89,4 +89,17 @@ test("binLabel names the whole values of a discrete bin", () => {
   const day = 86_400_000, jan1 = Date.UTC(2024, 0, 1);
   assert.equal(binLabel(d, { bins: [jan1, jan1 + day], counts: [1], discrete: true }, 0), "2024-01-01");
   assert.equal(binLabel(d, { bins: [jan1, jan1 + 7 * day], counts: [1], discrete: true }, 0), "2024-01-01 – 2024-01-07");
+});
+
+test("imageKind takes paths with an image extension and data: images", () => {
+  for (const v of ["a.png", "img/a b.JPG", "./a.jpeg", "/abs/a.webp", "C:\\img\\a.gif", "写真.bmp", " a.png "]) assert.equal(imageKind(v, "string"), "path", v);
+  assert.equal(imageKind("data:image/png;base64,AAAA", "string"), "data");
+});
+
+test("imageKind leaves URLs, other text and other types alone", () => {
+  for (const v of ["", "png", ".txt", "a.pngx", "a.svg", "https://example.com/a.png", "//example.com/a.png", "file:///a.png", "s3://b/a.png", "data:text/html,x", "data:image/png,x", "data:image/svg+xml,<svg/>", "x\na.png"]) {
+    assert.equal(imageKind(v, "string"), null, v);
+  }
+  assert.equal(imageKind("a.png", "integer"), null); // an invalid cell
+  assert.equal(imageKind('["a.png"]', "json"), null);
 });
