@@ -17,18 +17,18 @@ import (
 
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
-// LoadFile reads a CSV, TSV or JSONL file.
+// LoadFile reads a CSV, TSV, LTSV or JSONL file.
 func LoadFile(path string, opts Options) (*Table, error) {
 	format := opts.Format
 	if format == "" {
 		format = formatFromExt(path)
 	}
-	if format == JSONL {
+	if format == JSONL || format == LTSV {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, err
 		}
-		return LoadJSONL(data, opts)
+		return loadLinesOf(format, data, opts)
 	}
 
 	f, err := os.Open(path)
@@ -37,15 +37,15 @@ func LoadFile(path string, opts Options) (*Table, error) {
 	}
 	defer f.Close()
 	br := bufio.NewReaderSize(f, 1<<20)
-	if format == "" && looksLikeJSONL(br) {
+	if format == "" {
+		format = sniff(br, opts)
+	}
+	if format == JSONL || format == LTSV {
 		data, err := io.ReadAll(br)
 		if err != nil {
 			return nil, err
 		}
-		return LoadJSONL(data, opts)
-	}
-	if format == "" {
-		format = CSV
+		return loadLinesOf(format, data, opts)
 	}
 	var size int64
 	if fi, err := f.Stat(); err == nil {
@@ -54,10 +54,32 @@ func LoadFile(path string, opts Options) (*Table, error) {
 	return loadDelimited(br, format, opts, size)
 }
 
+func loadLinesOf(format Format, data []byte, opts Options) (*Table, error) {
+	if format == LTSV {
+		return LoadLTSV(data, opts)
+	}
+	return LoadJSONL(data, opts)
+}
+
+// sniff tells a format by the content, for a file whose extension does not.
+// CSV stands for TSV too; the delimiter is detected later. A delimiter or a
+// header asked for means CSV or TSV, not LTSV, which has neither.
+func sniff(br *bufio.Reader, opts Options) Format {
+	switch {
+	case looksLikeJSONL(br):
+		return JSONL
+	case opts.Delimiter == 0 && opts.Header == HeaderAuto && looksLikeLTSV(br):
+		return LTSV
+	}
+	return CSV
+}
+
 func formatFromExt(path string) Format {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".tsv", ".tab":
 		return TSV
+	case ".ltsv":
+		return LTSV
 	case ".jsonl", ".ndjson":
 		return JSONL
 	case ".csv":

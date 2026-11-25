@@ -1,4 +1,4 @@
-// Package table loads a CSV, TSV or JSONL file into an in-memory columnar
+// Package table loads a CSV, TSV, LTSV or JSONL file into an in-memory columnar
 // table and computes per-column statistics.
 //
 // Every cell keeps its original text (Raw). Integer, number, date and
@@ -51,6 +51,7 @@ type Format string
 const (
 	CSV   Format = "csv"
 	TSV   Format = "tsv"
+	LTSV  Format = "ltsv"
 	JSONL Format = "jsonl"
 )
 
@@ -60,7 +61,7 @@ type Column struct {
 	Type Type
 
 	// Raw is the original text of every cell. It is "" for a missing JSONL
-	// key. For String, Boolean and JSON columns it is also the value.
+	// key or LTSV label. For String, Boolean and JSON columns it is also the value.
 	Raw []string
 	// Ints holds Integer values, and Date and Datetime values as Unix
 	// milliseconds (UTC). Nil for other types.
@@ -83,7 +84,7 @@ type Column struct {
 func (c *Column) HasValue(i int) bool { return c.nulls[i>>6]&(1<<(uint(i)&63)) == 0 }
 
 // IsMissing reports whether row i of the column is missing: empty, absent
-// in JSONL, a JSON null, or, in Integer, Number, Date, Datetime and Boolean
+// in JSONL or LTSV, a JSON null, or, in Integer, Number, Date, Datetime and Boolean
 // columns, a null marker (null, na, nan).
 func (c *Column) IsMissing(i int) bool { return !c.HasValue(i) && !c.IsInvalid(i) }
 
@@ -123,16 +124,17 @@ type Table struct {
 	// the header: short rows were padded with missing cells, extra fields
 	// were dropped.
 	RaggedRows int
-	// SkippedLines counts JSONL lines that were not a JSON object.
+	// SkippedLines counts JSONL lines that were not a JSON object, and LTSV
+	// lines with a field without a label.
 	SkippedLines int
-	// FoldedKeys counts JSONL keys that did not get a column of their own
+	// FoldedKeys counts JSONL keys and LTSV labels that did not get a column of their own
 	// because of the column and empty-cell limits. They are kept per row in
 	// the OtherKeysColumn column.
 	FoldedKeys int
 }
 
-// OtherKeysColumn is the name of the JSONL column that holds the keys left
-// over by the column and empty-cell limits.
+// OtherKeysColumn is the name of the JSONL or LTSV column that holds the keys
+// left over by the column and empty-cell limits.
 const OtherKeysColumn = "(other keys)"
 
 // HeaderMode says how to treat the first row of a CSV/TSV file.
@@ -150,13 +152,13 @@ type Options struct {
 	Delimiter rune   // 0 detects; CSV/TSV only
 	Header    HeaderMode
 
-	// MaxColumns and MaxEmptyCells limit JSONL columns; 0 means the
+	// MaxColumns and MaxEmptyCells limit JSONL and LTSV columns; 0 means the
 	// defaults (DefaultMaxColumns, DefaultMaxEmptyCells).
 	MaxColumns    int
 	MaxEmptyCells int
 }
 
-// Limits for JSONL. Lines with different keys can make a small file a table
+// Limits for JSONL and LTSV. Lines with different keys can make a small file a table
 // of many sparse columns; past the limits the rarest keys are folded into
 // OtherKeysColumn. Only empty cells need a bound, since the rest grows with
 // the file: an empty cell costs 16 to 24 bytes, so 20M of them stay under

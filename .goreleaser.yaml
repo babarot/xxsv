@@ -57,7 +57,7 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
     homepage: https://github.com/babarot/xxsv
-    description: Show a CSV, TSV or JSONL file as a table in the browser, kept up to date as you edit it
+    description: Show a CSV, TSV, LTSV or JSONL file as a table in the browser, kept up to date as you edit it
     license: MIT
 
 nix:
@@ -66,6 +66,6 @@ nix:
       name: nur-packages
       token: "{{ .Env.NUR_GITHUB_TOKEN }}"
     homepage: https://github.com/babarot/xxsv
-    description: Show a CSV, TSV or JSONL file as a table in the browser, kept up to date as you edit it
+    description: Show a CSV, TSV, LTSV or JSONL file as a table in the browser, kept up to date as you edit it
     license: mit
     main_program: xxsv

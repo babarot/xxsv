@@ -19,12 +19,16 @@ func TestLoadTiming(t *testing.T) {
 	}
 	start := time.Now()
 	n := 0
-	eachLine(data, func(line []byte) {
-		if _, err := parseObject(line); err == nil {
+	lf := jsonLines
+	if formatFromExt(path) == LTSV {
+		lf = ltsvLines
+	}
+	eachLine(data, lf.trim, func(line []byte) {
+		if _, err := lf.parse(line); err == nil {
 			n++
 		}
 	})
-	t.Logf("one parse pass: %v (%d objects)", time.Since(start), n)
+	t.Logf("one parse pass: %v (%d records)", time.Since(start), n)
 
 	start = time.Now()
 	tb, err := LoadFile(path, Options{})
