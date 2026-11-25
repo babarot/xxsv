@@ -46,7 +46,7 @@ export function renderStatus() {
   };
   if (S.meta.headerGenerated) add("no header row", "Columns are named col1, col2, … (run with --header to read the first row as names)");
   if (S.meta.raggedRows) add(`${fmt(S.meta.raggedRows)} ragged rows`, "Rows with a different number of fields than the header");
-  if (S.meta.skippedLines) add(`${fmt(S.meta.skippedLines)} lines skipped`, "Lines that were not JSON objects");
+  if (S.meta.skippedLines) add(`${fmt(S.meta.skippedLines)} lines skipped`, S.meta.format === "ltsv" ? "Lines with a field that is not label:value" : "Lines that were not JSON objects");
   if (S.meta.foldedKeys) add(`${fmt(S.meta.foldedKeys)} keys folded`, 'Rare keys kept together in the "(other keys)" column');
   showError(S.meta.error ? `reload failed: ${S.meta.error} (showing the last good version)` : "");
 }

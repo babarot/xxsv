@@ -1,6 +1,6 @@
 # xxsv
 
-xxsv shows a CSV, TSV or JSONL file as a table in your browser and keeps it up to date while you edit the file.
+xxsv shows a CSV, TSV, LTSV or JSONL file as a table in your browser and keeps it up to date while you edit the file.
 
 <p align="center">
   <picture>
@@ -12,7 +12,7 @@ xxsv shows a CSV, TSV or JSONL file as a table in your browser and keeps it up t
 
 Run `xxsv data.csv` and a page opens with the table. Save the file in your editor, and the page reloads it in place: the sort, the filters, the search and the scroll position stay, and the cells that changed glow for a moment.
 
-The name, xxsv (ex-ex-es-vee), stands for eXtended [xsv](https://github.com/BurntSushi/xsv), the CSV toolkit. What xsv's commands do on the command line, selecting columns, sorting, searching, counting values, slicing, xxsv does in the browser, on any separator and on JSONL too, while the file changes. It is a separate tool, not a successor to xsv.
+The name, xxsv (ex-ex-es-vee), stands for eXtended [xsv](https://github.com/BurntSushi/xsv), the CSV toolkit. What xsv's commands do on the command line, selecting columns, sorting, searching, counting values, slicing, xxsv does in the browser, on any separator and on LTSV and JSONL too, while the file changes. It is a separate tool, not a successor to xsv.
 
 ## Features
 
@@ -55,6 +55,7 @@ go install github.com/babarot/xxsv/cmd/xxsv@latest
 ```sh
 xxsv data.csv
 xxsv events.jsonl
+xxsv access.ltsv
 xxsv -p 8080 --no-open report.tsv
 ```
 
@@ -70,7 +71,7 @@ flags:
       --version       print the version
 ```
 
-The format comes from the file extension (`.csv`, `.tsv`, `.tab`, `.jsonl`, `.ndjson`) or, failing that, from the content, including whether fields are separated by commas or tabs. For CSV and TSV, the first row is the header unless one of its cells is a bare number; `-n` and `--header` decide it yourself.
+The format comes from the file extension (`.csv`, `.tsv`, `.tab`, `.ltsv`, `.jsonl`, `.ndjson`) or, failing that, from the content, including whether fields are separated by commas or tabs. For CSV and TSV, the first row is the header unless one of its cells is a bare number; `-n` and `--header` decide it yourself.
 
 In the page:
 
@@ -107,14 +108,14 @@ xxsv looks at the first 5,000 rows of each column and picks the type that 95% of
 A cell is then one of three things:
 
 - a value of the column's type;
-- missing: empty, an absent key or `null` in JSONL, or, in integer, number, date, datetime and boolean columns, the text `null`, `na` or `nan` (in a string column, `NA` stays a value);
+- missing: empty, an absent key or `null` in JSONL, an absent label in LTSV, or, in integer, number, date, datetime and boolean columns, the text `null`, `na` or `nan` (in a string column, `NA` stays a value);
 - invalid: text that is not a value of the type, such as `pending` in a number column. Invalid cells are underlined in the table, counted apart from missing ones, and sort after the values.
 
 Datetimes without a time zone are shown as written. When a column has times with zones, they are shown in UTC.
 
 In a string column, a path that ends in `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp` or `.bmp` is shown as an image when there is one. An absolute path may be anywhere; a relative one starts at the table's directory and stays inside it. The file's content must be an image of one of these types. A base64 `data:image/...` URL is shown the same way; other URLs are left as text.
 
-JSONL lines become rows and their top-level keys become columns. Files whose lines use many different keys keep the 1,000 most common as columns and fold the rest into an `(other keys)` column.
+JSONL lines become rows and their top-level keys become columns; [LTSV](http://ltsv.org/) lines and their labels do the same. An LTSV line with a field that is not `label:value` is skipped and counted, like a JSONL line that is not an object; the last of a repeated label counts, and escapes such as `\x22` stay as written. Files whose lines use many different keys keep the 1,000 most common as columns and fold the rest into an `(other keys)` column.
 
 ## Development
 

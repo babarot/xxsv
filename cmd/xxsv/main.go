@@ -1,5 +1,5 @@
-// Command xxsv serves a CSV, TSV or JSONL file and shows it as a table in the
-// browser, reloading it whenever the file changes.
+// Command xxsv serves a CSV, TSV, LTSV or JSONL file and shows it as a table
+// in the browser, reloading it whenever the file changes.
 package main
 
 import (
@@ -41,8 +41,8 @@ const defaultPort = 7333
 
 const usage = `usage: xxsv [flags] <file>
 
-Serve a CSV, TSV or JSONL file at http://127.0.0.1:%d/ and open it in the
-browser. The page follows the file as it changes. Ctrl-C stops.
+Serve a CSV, TSV, LTSV or JSONL file at http://127.0.0.1:%d/ and open it in
+the browser. The page follows the file as it changes. Ctrl-C stops.
 
 flags:
   -p, --port N        port to listen on (default %d; a free one if taken)

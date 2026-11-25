@@ -209,7 +209,7 @@ func isMissingText(s string, t Type) bool {
 }
 
 // push appends one cell. null marks a cell that is missing regardless of its
-// text (an absent JSONL key or a JSON null). A cell with text that is not a
+// text (an absent JSONL key or LTSV label, or a JSON null). A cell with text that is not a
 // value of the column's type is invalid.
 func (c *Column) push(raw string, null bool) error {
 	i := len(c.Raw)

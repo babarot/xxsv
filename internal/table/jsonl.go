@@ -10,8 +10,9 @@ import (
 	"unsafe"
 )
 
-// field is one top-level key of a JSONL object, in the order it appeared.
-// val is the raw JSON text of the value, a slice of the input.
+// field is one top-level key of a JSONL object, or one label of an LTSV
+// line, in the order it appeared. val is the text of the value as the file
+// has it (JSON text in JSONL), a slice of the input.
 type field struct {
 	key string
 	val []byte
@@ -133,9 +134,10 @@ func view(b []byte) string {
 	return unsafe.String(&b[0], len(b))
 }
 
-// eachLine calls fn for every non-blank line of data, without a length
-// limit: a Claude Code session can have lines of more than 1 MB.
-func eachLine(data []byte, fn func(line []byte)) {
+// eachLine calls fn for every line of data that trim leaves something of,
+// without a length limit: a Claude Code session can have lines of more than
+// 1 MB.
+func eachLine(data []byte, trim func([]byte) []byte, fn func(line []byte)) {
 	for len(data) > 0 {
 		var line []byte
 		if i := bytes.IndexByte(data, '\n'); i >= 0 {
@@ -143,14 +145,14 @@ func eachLine(data []byte, fn func(line []byte)) {
 		} else {
 			line, data = data, nil
 		}
-		line = bytes.TrimSpace(line)
+		line = trim(line)
 		if len(line) > 0 {
 			fn(line)
 		}
 	}
 }
 
-// cell is one decoded JSONL value.
+// cell is one decoded JSONL or LTSV value.
 type cell struct {
 	raw  string
 	null bool
@@ -218,16 +220,41 @@ type keyInfo struct {
 	order, count, lastRow int
 }
 
+// lineFormat is a format of one record per line, where each record names its
+// own fields.
+type lineFormat struct {
+	format Format
+	trim   func(line []byte) []byte           // nothing is left of a blank line
+	parse  func(line []byte) ([]field, error) // fails for a line to skip
+	split  func(line []byte) ([]field, error) // parse, for a line known to parse
+	decode func(val []byte) cell
+	encode func(val []byte) string // as JSON, for OtherKeysColumn
+}
+
+var jsonLines = lineFormat{
+	format: JSONL,
+	trim:   bytes.TrimSpace,
+	parse:  parseObject,
+	split:  splitObject,
+	decode: decodeCell,
+	encode: compact,
+}
+
 // LoadJSONL reads JSON Lines: one object per line, its top-level keys
 // becoming columns. Lines that are not a JSON object are skipped and
 // counted.
+func LoadJSONL(data []byte, opts Options) (*Table, error) {
+	return loadLines(data, opts, jsonLines)
+}
+
+// loadLines reads a format of one record per line.
 //
 // The data is read twice. The first pass counts the rows and how often each
 // key appears; it decides which keys get a column. Keys that appear in few
 // rows would add mostly empty cells, so when the number of columns or of
 // empty cells would pass the limits, the rarest keys are folded into one
 // JSON column, OtherKeysColumn.
-func LoadJSONL(data []byte, opts Options) (*Table, error) {
+func loadLines(data []byte, opts Options, lf lineFormat) (*Table, error) {
 	data = bytes.TrimPrefix(data, utf8BOM)
 	maxCols := opts.MaxColumns
 	if maxCols <= 0 {
@@ -238,12 +265,12 @@ func LoadJSONL(data []byte, opts Options) (*Table, error) {
 		maxEmpty = DefaultMaxEmptyCells
 	}
 
-	t := &Table{Format: JSONL}
+	t := &Table{Format: lf.format}
 	keys := map[string]*keyInfo{}
 	var order []string
 	var valid []bool // per non-blank line, from the first pass
-	eachLine(data, func(line []byte) {
-		fields, err := parseObject(line)
+	eachLine(data, lf.trim, func(line []byte) {
+		fields, err := lf.parse(line)
 		valid = append(valid, err == nil)
 		if err != nil {
 			t.SkippedLines++
@@ -330,12 +357,12 @@ func LoadJSONL(data []byte, opts Options) (*Table, error) {
 		}
 	}
 	lineNo := -1
-	eachLine(data, func(line []byte) {
+	eachLine(data, lf.trim, func(line []byte) {
 		lineNo++
 		if !valid[lineNo] {
 			return
 		}
-		fields, _ := splitObject(line)
+		fields, _ := lf.split(line)
 		row := make([]cell, ncol)
 		for i := range row {
 			row[i].null = true
@@ -343,13 +370,13 @@ func LoadJSONL(data []byte, opts Options) (*Table, error) {
 		var other []field
 		for _, f := range fields {
 			if ci, ok := colOf[f.key]; ok {
-				row[ci] = decodeCell(f.val)
+				row[ci] = lf.decode(f.val)
 			} else {
 				other = append(other, f)
 			}
 		}
 		if folded && len(other) > 0 {
-			row[ncol-1] = cell{raw: encodeObject(other), kind: 'j'}
+			row[ncol-1] = cell{raw: encodeObject(other, lf.encode), kind: 'j'}
 		}
 		if typed {
 			push(row)
@@ -373,8 +400,9 @@ func LoadJSONL(data []byte, opts Options) (*Table, error) {
 	return t, nil
 }
 
-// encodeObject writes fields back as one compact JSON object.
-func encodeObject(fields []field) string {
+// encodeObject writes fields as one compact JSON object; encode writes a
+// value as JSON.
+func encodeObject(fields []field, encode func([]byte) string) string {
 	var b strings.Builder
 	b.WriteByte('{')
 	for i, f := range fields {
@@ -384,7 +412,7 @@ func encodeObject(fields []field) string {
 		k, _ := json.Marshal(f.key)
 		b.Write(k)
 		b.WriteByte(':')
-		b.WriteString(compact(f.val))
+		b.WriteString(encode(f.val))
 	}
 	b.WriteByte('}')
 	return b.String()
