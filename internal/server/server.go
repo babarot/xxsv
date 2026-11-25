@@ -185,6 +185,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/rows", s.handleRows)
 	mux.HandleFunc("GET /api/cell", s.handleCell)
 	mux.HandleFunc("GET /api/row", s.handleRow)
+	mux.HandleFunc("GET /api/image", s.handleImage)
 	mux.HandleFunc("POST /api/values", s.handleValues)
 	mux.HandleFunc("POST /api/check", s.handleCheck)
 	mux.HandleFunc("POST /api/export", s.handleExportStart)

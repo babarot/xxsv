@@ -116,6 +116,21 @@ export function viewSentence(meta: Meta, total: number, view: ViewState) {
   return parts.join(", ") + ".";
 }
 
+const THUMB_CHARS = 5; // the room a cell's small image takes
+
+// The types match the server's imageTypes.
+const DATA = /^\s*data:image\/(?:png|jpeg|gif|webp|bmp);base64,/i;
+const PATH = /^[^\r\n]{1,1024}\.(?:png|jpe?g|gif|webp|bmp)\s*$/i;
+// A scheme is two or more letters, so that C:\a.png is a path.
+const URL_LIKE = /^\s*(?:[a-z][a-z0-9+.-]+:|\/\/)/i;
+
+// imageKind says how a value may name an image, from its text alone.
+export function imageKind(value: string, type: ColType): "data" | "path" | null {
+  if (type !== "string") return null;
+  if (DATA.test(value)) return "data";
+  return PATH.test(value) && !URL_LIKE.test(value) ? "path" : null;
+}
+
 // estimateWidth picks a column's width in pixels from its name, type and a
 // sample of its values (the first rows shown), between 90 and 340.
 export function estimateWidth(c: Column, values: string[] = []): number {
@@ -126,7 +141,7 @@ export function estimateWidth(c: Column, values: string[] = []): number {
   else if (c.type === "datetime") chars = Math.max(chars, 18);
   else if (c.type === "boolean") chars = Math.max(chars, 6);
   else if (c.type === "json") chars = Math.max(chars, 12);
-  else chars = Math.max(chars, Math.min(longest, 34), 12);
+  else chars = Math.max(chars, Math.min(longest, 34) + (values.some((v) => imageKind(v, c.type)) ? THUMB_CHARS : 0), 12);
   return Math.max(90, Math.min(340, chars * 7.2 + 22));
 }
 
