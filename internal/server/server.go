@@ -191,6 +191,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/export", s.handleExportStart)
 	mux.HandleFunc("GET /api/export/{token}", s.handleExportDownload)
 	mux.HandleFunc("POST /api/aggregate", s.handleAggregate)
+	mux.HandleFunc("POST /api/copy", s.handleCopy)
 	mux.HandleFunc("GET /api/events", s.handleEvents)
 	files := s.opts.UI
 	if files == nil {
