@@ -114,8 +114,9 @@ button { font: inherit; color: inherit; }
 .miss-col { width: 7px; flex: none; display: flex; align-items: flex-end; background: var(--surface-3); border-radius: 1px; }
 .miss-col i { display: block; width: 100%; border-radius: 1px; }
 .corner { position: sticky; left: 0; z-index: 2; background: var(--bg) !important; cursor: default !important; }
-#rows { position: absolute; left: 0; }
-#rows .row > div { height: var(--row-h); line-height: var(--row-h); padding: 0 8px; cursor: cell; position: relative; }
+/* Dragging over cells selects cells, not their text. */
+#rows { position: absolute; left: 0; -webkit-user-select: none; user-select: none; }
+#rows .row > div { height: var(--row-h); line-height: var(--row-h); padding: 0 8px; cursor: default; position: relative; }
 /* #rows .row > div sets position: relative (for the expand mark); the row
    number needs the stronger selector to stay sticky. */
 #rows .row > .rh { position: sticky; }

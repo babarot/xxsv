@@ -18,7 +18,7 @@ The name, xxsv (ex-ex-es-vee), stands for eXtended [xsv](https://github.com/Burn
 
 - Follows the file. Every save reloads the table without losing your place. Changed cells and added rows are highlighted, and the status bar says what changed ("3 changed, 2 added, 1 removed").
 - Large files. The server holds the table and the page fetches only the rows in view, so a file of a million rows scrolls, sorts and filters without loading the browser.
-- Spreadsheet-like. Select cells, ranges, whole columns or rows with the mouse or the arrow keys, and see the count, sum, average, minimum and maximum of the range.
+- Spreadsheet-like. Select cells, ranges, whole columns or rows with the mouse or the arrow keys, copy it, and see the count, sum, average, minimum and maximum of the range.
 - A distribution for every column. A histogram or the top values sit under each column name; click one for statistics and filters.
 - Columns. Hide columns and drag them into another order, and sort by several columns at once.
 - Search and filter with plain text or regular expressions (RE2), across all cells or in one column.
@@ -77,6 +77,8 @@ In the page:
 | Key | Action |
 |---|---|
 | Arrow keys | Move the selection; with Shift, extend the range |
+| Drag | Select a range of cells |
+| Cmd-C, Ctrl-C | Copy the selected cells, tab-separated |
 | Click a column name | Sort by that column: ascending, descending, off |
 | Shift-click a column name | Add it as the next sort key, or turn its key around or off |
 | Enter | Show the selected row in the side panel |

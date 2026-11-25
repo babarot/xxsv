@@ -17,6 +17,8 @@ import { wireValuesPanel } from "./values-panel.ts";
 import { wireSearch } from "./search.ts";
 import { filterBySelected, renderSelectionInfo } from "./cell-popover.ts";
 import { $, copyText } from "./dom.ts";
+import { copySelection, isCopy } from "./copy.ts";
+import { wireDrag } from "./drag.ts";
 import { wireThumbs } from "./thumbs.ts";
 import { grid, hasMore, render, scheduleRender } from "./grid.ts";
 import { renderHeader } from "./header.ts";
@@ -44,8 +46,14 @@ function setup() {
   // browser would also extend its text selection over the header's labels
   // and the formula bar, so that is stopped.
   g.addEventListener("mousedown", (e) => {
+    // The press takes the keyboard from a text box, and drops text selected
+    // elsewhere, so that a copy is of the cells. The browser does neither
+    // over cells, whose text cannot be selected, or once prevented.
+    if (document.activeElement instanceof HTMLInputElement) document.activeElement.blur();
+    getSelection()?.removeAllRanges();
     if (e.shiftKey) e.preventDefault();
   });
+  wireDrag(g);
   g.addEventListener("click", (e) => {
     if (!S.meta) return;
     const t = e.target as HTMLElement;
@@ -72,16 +80,6 @@ function setup() {
       [S.cur, S.anchor] = wholeRow(Number(rh.dataset.row), S.cols.length);
       select(S.cur, true);
       return;
-    }
-    const cell = t.closest<HTMLElement>("[data-r]");
-    if (!cell) return;
-    select({ r: Number(cell.dataset.r), c: Number(cell.dataset.c) }, e.shiftKey);
-    // A double-click opens the cell popover. The first click rebuilt the
-    // rows, so the second lands on a new element and no dblclick event
-    // fires; the click's detail still counts it.
-    if (e.detail === 2 && !e.shiftKey && hasMore(S.cur)) {
-      S.expanded = true;
-      renderSelectionInfo();
     }
   });
   g.addEventListener("scroll", scheduleRender, { passive: true });
@@ -110,6 +108,11 @@ function setup() {
       else if (typing) (t as HTMLElement).blur();
       else if (S.colPop !== null) toggleColPop(S.colPop);
       else if (S.expanded) { S.expanded = false; renderSelectionInfo(); }
+      return;
+    }
+    if (!typing && $("settings").hidden && isCopy(e)) {
+      e.preventDefault();
+      void copySelection();
       return;
     }
     if (typing || e.metaKey || e.ctrlKey || e.altKey || !$("settings").hidden) return;
