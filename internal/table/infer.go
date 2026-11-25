@@ -12,14 +12,32 @@ import (
 
 // What a value of each type looks like. A number whose integer part starts
 // with 0 and has more digits (007, 00097) is not a number: the zeros are
-// part of a code, such as a postal code. Dates and times are ISO 8601 only;
-// 01/02/2024 is ambiguous.
+// part of a code, such as a postal code. Dates and times are ISO 8601;
+// 01/02/2024 is ambiguous. The time of web server logs names its month, so
+// it is not, and is read too: 10/Oct/2000:13:55:36 -0700, as nginx writes
+// it, or in brackets, as Apache does.
 var (
 	intRE      = regexp.MustCompile(`^[+-]?(0|[1-9]\d*)$`)
 	numRE      = regexp.MustCompile(`^[+-]?((0|[1-9]\d*)(\.\d*)?|\.\d+)([eE][+-]?\d+)?$`)
 	dateRE     = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 	datetimeRE = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$`)
+	logTimeRE  = regexp.MustCompile(`^(\[` + logTime + `\]|` + logTime + `)$`)
 )
+
+const (
+	logTime       = `\d{2}/(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/\d{4}:\d{2}:\d{2}:\d{2} [+-]\d{4}`
+	logTimeLayout = "02/Jan/2006:15:04:05 -0700"
+)
+
+// cutLogTime returns the time in a web server log's time, without brackets,
+// and whether s looks like one. It only looks at a few bytes, since it runs
+// on every cell of a datetime column.
+func cutLogTime(s string) (string, bool) {
+	if len(s) == len(logTimeLayout)+2 && s[0] == '[' && s[len(s)-1] == ']' {
+		s = s[1 : len(s)-1]
+	}
+	return s, len(s) == len(logTimeLayout) && s[2] == '/' && s[6] == '/' && s[11] == ':' && s[20] == ' '
+}
 
 // isIntText and isNumText match intRE and numRE without the regexp engine,
 // which is several times slower and runs on every cell of a number column.
@@ -135,7 +153,7 @@ func (c *counter) addText(s string) {
 		c.nums++
 	case isNumText(s):
 		c.nums++
-	case datetimeRE.MatchString(s):
+	case datetimeRE.MatchString(s), logTimeRE.MatchString(s):
 		c.datetimes++
 	case dateRE.MatchString(s):
 		c.dates++
@@ -254,7 +272,7 @@ func (c *Column) push(raw string, null bool) error {
 			if ms, ok = parseTime(raw, c.Type); !ok {
 				bad, ms = true, 0
 			} else if c.Type == Datetime {
-				if hasZone(s) {
+				if _, log := cutLogTime(s); log || hasZone(s) {
 					c.zoned++
 				} else {
 					c.naive++
@@ -333,6 +351,10 @@ func ParseTime(s string, t Type) (int64, error) {
 func parseTime(s string, t Type) (int64, bool) {
 	s = strings.TrimSpace(s)
 	if t == Datetime {
+		if l, ok := cutLogTime(s); ok {
+			tm, err := time.Parse(logTimeLayout, l)
+			return tm.UnixMilli(), err == nil
+		}
 		for _, layout := range datetimeLayouts {
 			if tm, err := time.Parse(layout, s); err == nil {
 				return tm.UnixMilli(), true

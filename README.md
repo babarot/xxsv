@@ -100,7 +100,7 @@ xxsv looks at the first 5,000 rows of each column and picks the type that 95% of
 | integer | `42`, `-7`, `+1` (not `007`: leading zeros mean a code, such as a postal code, and the column stays a string) |
 | number | `3.14`, `.5`, `1e-3` |
 | date | `2024-01-02` |
-| datetime | `2024-01-02 10:00`, `2024-01-02T10:00:00Z`, `2024-01-02T10:00:00+09:00` (a column may mix dates in) |
+| datetime | `2024-01-02 10:00`, `2024-01-02T10:00:00Z`, `2024-01-02T10:00:00+09:00`, or as web servers log it, `10/Oct/2000:13:55:36 -0700`, in brackets or not (a column may mix dates in) |
 | boolean | `true`, `false`, in any case |
 | json | objects and arrays, such as nested values in JSONL |
 | string | anything else |
