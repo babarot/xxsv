@@ -322,3 +322,32 @@ func TestHeaderDetectionWithLeadingZeros(t *testing.T) {
 	eq(t, "a first row of codes is data", tb.HeaderGenerated, true)
 	eq(t, "rows", tb.Rows, 2)
 }
+
+func TestLogTimes(t *testing.T) {
+	tb := load(t, CSV, "apache,nginx,mixed,open,month,n\n"+
+		"[10/Oct/2000:13:55:36 -0700],10/Oct/2000:13:55:36 -0700,[01/Nov/2000:00:00:00 +0900],[10/Oct/2000:13:55:36 -0700,10/Okt/2000:13:55:36 -0700,10/10/2000\n"+
+		"[01/Nov/2000:00:00:00 +0000],29/Feb/2024:23:59:59 +0900,2000-10-31 15:00:00,10/Oct/2000:13:55:36 -0700],10/oct/2000:13:55:36 -0700,11/10/2000\n", Options{})
+	eq(t, "types", types(tb), []string{"datetime", "datetime", "datetime", "string", "string", "string"})
+	eq(t, "brackets", tb.Columns[0].Ints, []int64{971211336000, 973036800000})
+	eq(t, "no brackets", tb.Columns[1].Ints, []int64{971211336000, 1709218799000})
+	eq(t, "the same moment in both formats", tb.Columns[2].Ints[0], tb.Columns[2].Ints[1])
+	eq(t, "text kept as written", tb.Columns[0].Raw[0], "[10/Oct/2000:13:55:36 -0700]")
+	for i := range 3 {
+		eq(t, "it has a zone, so UTC", tb.Columns[i].UTC(), true)
+	}
+	eq(t, "label", tb.Columns[0].Stats().MinLabel, "2000-10-10 20:55:36Z")
+}
+
+func TestLogTimesThatAreNotTimes(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("at\n")
+	for i := range 60 {
+		fmt.Fprintf(&b, "[%02d/Oct/2000:13:55:36 -0700]\n", i%30+1)
+	}
+	b.WriteString("[31/Sep/2000:13:55:36 -0700]\n[10/Oct/2000:25:55:36 -0700]\n-\n")
+	c := load(t, CSV, b.String(), Options{}).Columns[0]
+	eq(t, "type", c.Type, Datetime)
+	for i := 60; i < 63; i++ {
+		eq(t, c.Raw[i]+" is invalid", c.IsInvalid(i), true)
+	}
+}

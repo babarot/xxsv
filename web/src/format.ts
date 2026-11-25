@@ -138,7 +138,7 @@ export function estimateWidth(c: Column, values: string[] = []): number {
   const longest = Math.max(0, ...values.map((v) => v.length));
   if (isNum(c.type)) chars = Math.max(chars, longest + 3, 8);
   else if (c.type === "date") chars = Math.max(chars, 11);
-  else if (c.type === "datetime") chars = Math.max(chars, 18);
+  else if (c.type === "datetime") chars = Math.max(chars, Math.min(longest + 1, 34), 18);
   else if (c.type === "boolean") chars = Math.max(chars, 6);
   else if (c.type === "json") chars = Math.max(chars, 12);
   else chars = Math.max(chars, Math.min(longest, 34) + (values.some((v) => imageKind(v, c.type)) ? THUMB_CHARS : 0), 12);

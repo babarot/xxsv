@@ -80,6 +80,12 @@ test("estimateWidth stays between 90 and 340 pixels", () => {
   assert.ok(w > 90 && w < 340);
 });
 
+test("estimateWidth fits a log's time with its zone", () => {
+  const w = (v: string) => estimateWidth({ name: "t", type: "datetime" }, [v]);
+  assert.ok(w("[10/Oct/2000:13:55:36 -0700]") > w("2024-01-02 10:00"));
+  assert.equal(w("2024-01-02 10:00"), w(""));
+});
+
 test("binLabel names the whole values of a discrete bin", () => {
   const n = stats("integer");
   assert.equal(binLabel(n, { bins: [1, 2, 3], counts: [5, 5], discrete: true }, 0), "1");
