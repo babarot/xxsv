@@ -1,7 +1,7 @@
 // The table body: virtual scrolling (scroll.ts does the math) and drawing
 // the rows in view, with the selection and the glow of the last reload.
 import { BLOCK, FLASH_MS, LONG_CHARS, NULL_MARK } from "./constants.ts";
-import { fmt, groupDigits, imageKind, invalidText, isNum } from "./format.ts";
+import { fmt, groupDigits, imageKind, imageName, invalidText, isNum } from "./format.ts";
 import { writeHash } from "./hash.ts";
 import { icon } from "./icons.ts";
 import { blockOf } from "./rows.ts";
@@ -13,7 +13,7 @@ import { positionPopovers } from "./cell-popover.ts";
 import { $, el } from "./dom.ts";
 import { gridTemplate } from "./header.ts";
 import { renderCounts } from "./status.ts";
-import { thumb } from "./thumbs.ts";
+import { showsImages, thumb } from "./thumbs.ts";
 
 export const grid = () => $("grid");
 
@@ -111,7 +111,13 @@ export function render() {
       if (v === "") cell.classList.add("null");
       if (block.cut.has(`${r},${c}`)) cell.classList.add("cut");
       const small = thumb({ value: v, type: t, gen: S.meta!.generation, rowId: block.rowIds[r], fileCol: S.fileIdx[c] }, cols[c].name, scheduleRender);
-      if (small) cell.prepend(small);
+      if (small) {
+        if (showsImages(cols[c].name) && imageKind(v, t) === "path") {
+          cell.textContent = imageName(v);
+          cell.title = v;
+        }
+        cell.prepend(small);
+      }
       if (bad) {
         cell.classList.add("bad");
         cell.title = `${invalidText(t)} in a ${t} column`;

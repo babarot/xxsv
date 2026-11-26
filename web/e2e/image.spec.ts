@@ -79,7 +79,10 @@ test("shows a small image in the cell, and a larger one on hover", async ({ page
   await expect(small).toBeVisible();
   await expect(cell(page, 1, 1).locator(".thumb canvas")).toBeHidden();
   await expect(cell(page, 2, 1).locator(".thumb")).toHaveCount(0);
-  await expect(cell(page, 0, 1)).toHaveText("img/a.png");
+  // A path to an image shows its file name; one without a file shows as written.
+  await expect(cell(page, 0, 1)).toHaveText("a.png");
+  await expect(cell(page, 0, 1)).toHaveAttribute("title", "img/a.png");
+  await expect(cell(page, 1, 1)).toHaveText("nope.png");
   expect(await cell(page, 0, 1).evaluate((e) => (e as HTMLElement).offsetHeight)).toBe(26);
   await small.hover();
   await drawn(page.locator("#imgzoom img"));
