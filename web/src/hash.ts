@@ -1,5 +1,6 @@
 // The view state in the URL hash, so it survives both a file reload and a
 // browser reload.
+import { normalize } from "./filters.ts";
 import type { ViewState } from "./types.ts";
 
 export const emptyView = (): ViewState => ({ search: "", regex: false, filters: [], sorts: [], columns: null, top: 0 });
@@ -14,7 +15,7 @@ export function parseHash(hash: string): ViewState {
     const v = JSON.parse(raw);
     const sorts = Array.isArray(v.sorts) ? v.sorts : v.sort ? [v.sort] : [];
     const columns = Array.isArray(v.columns) && v.columns.length ? v.columns : null;
-    return { search: v.search ?? "", regex: v.regex === true, filters: v.filters ?? [], sorts, columns, top: v.top ?? 0 };
+    return { search: v.search ?? "", regex: v.regex === true, filters: normalize(v.filters), sorts, columns, top: v.top ?? 0 };
   } catch {
     return emptyView();
   }

@@ -22,7 +22,7 @@ const canFilterBy = (col: Column, cell: CellInfo, ready: boolean) => cell.value 
 
 function filterBy(col: Column, cell: CellInfo, value: string) {
   if (cell.value === "") setFilter(col.name, { column: col.name, op: "null" });
-  else setFilter(col.name, { column: col.name, op: "equals", value });
+  else setFilter(col.name, { column: col.name, op: "in", values: [value] });
 }
 
 // The formula bar's filter button acts on the selected cell; what it

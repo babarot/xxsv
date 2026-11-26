@@ -1,4 +1,5 @@
 // The top bar's file and counts, and the status bar at the bottom.
+import { liveFilters } from "./filters.ts";
 import { changeSummary, fmt } from "./format.ts";
 import { S } from "./app.ts";
 import { $, el } from "./dom.ts";
@@ -14,7 +15,7 @@ export function renderTop() {
 // are hidden, a link to the column list says how many.
 export function renderCounts() {
   if (!S.meta) return;
-  const filtered = S.view.search !== "" || S.view.filters.length > 0;
+  const filtered = S.view.search !== "" || liveFilters(S.view.filters).length > 0;
   const counts = $("counts");
   counts.textContent = filtered
     ? `${fmt(S.total)} of ${fmt(S.meta.rows)} rows · ${S.cols.length} columns`

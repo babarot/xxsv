@@ -1,4 +1,4 @@
-import { test, expect, open, cell, saveAndWait } from "./fixtures";
+import { test, expect, open, cell, saveAndWait, chips, removeChip } from "./fixtures";
 
 const items = (page: import("@playwright/test").Page) =>
   page.locator("#pinpanel .vals-item").evaluateAll((els) => els.map((e) => `${e.querySelector("span")!.textContent}:${e.querySelector("b")!.textContent}`));
@@ -14,14 +14,14 @@ test("lists a column's values, and filters by one", async ({ page, serve }) => {
   // Most frequent first; equal counts in the order they first appear.
   await expect.poll(() => items(page)).toEqual(["Osaka:3", "Lima:1", "∅ (missing):1", "Oslo:1"]);
   await page.locator("#pinpanel .vals-item").first().click();
-  await expect(page.locator("#chips .chip")).toHaveText("city is “Osaka”");
+  await expect(chips(page)).toHaveText(["city: Osaka"]);
   await expect(page.locator("#counts")).toHaveText("3 of 6 rows · 2 columns");
   // The column's own filter does not narrow its list: the active value is
   // marked, and another one switches to it.
   await expect.poll(() => items(page)).toEqual(["Osaka:3", "Lima:1", "∅ (missing):1", "Oslo:1"]);
   await expect(page.locator("#pinpanel .vals-item.on")).toHaveText(/Osaka/);
   await page.locator("#pinpanel .vals-item", { hasText: "Lima" }).click();
-  await expect(page.locator("#chips .chip")).toHaveText("city is “Lima”");
+  await expect(chips(page)).toHaveText(["city: Lima"]);
   await expect(page.locator("#counts")).toHaveText("1 of 6 rows · 2 columns");
   await page.locator("#pinpanel .vals-item.on").click(); // pressed again: the filter goes
   await expect(page.locator("#chips")).toBeHidden();
@@ -38,7 +38,7 @@ test("searches the values, and counts booleans the way a filter matches them", a
   await expect.poll(() => items(page)).toEqual(["true:79", "false:39", "pending:1", "∅ (missing):1"]);
   await page.locator("#pinpanel .vals-item", { hasText: "pending" }).click();
   await expect(page.locator("#counts")).toHaveText("1 of 120 rows · 2 columns");
-  await page.locator("#chips .chip .btn-icon").click();
+  await removeChip(page);
   await page.locator("#pinpanel .vals-search").fill("TRU");
   await expect.poll(() => items(page)).toEqual(["true:79"]);
 });

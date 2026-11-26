@@ -75,7 +75,7 @@ function draw(rowId: number, cells: RowCell[]) {
     // JSON values cannot be matched; a missing cell filters to missing ones.
     f.disabled = !missing && col.type === "json";
     f.title = missing ? "Filter to missing cells" : f.disabled ? "JSON values cannot be filtered by" : "Filter by this value";
-    f.addEventListener("click", () => setFilter(col.name, missing ? { column: col.name, op: "null" } : { column: col.name, op: "equals", value: c.value }));
+    f.addEventListener("click", () => setFilter(col.name, missing ? { column: col.name, op: "null" } : { column: col.name, op: "in", values: [c.value] }));
     k.appendChild(f);
     const v = el("div", "v" + (missing ? " null" : ""), missing ? `${NULL_MARK} (missing)` : pretty(c?.value ?? "", col.type));
     const image = missing || !c ? null : cellImage({ value: c.value, type: col.type, gen: S.meta.generation, rowId, fileCol: fi });

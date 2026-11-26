@@ -12,7 +12,7 @@
 html, body { height: 100%; margin: 0; }
 body { font: 13px/1.45 var(--sans); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
 button { font: inherit; color: inherit; }
-#app { display: flex; flex-direction: column; height: 100vh; background: var(--surface); }
+#app { display: flex; flex-direction: column; height: 100vh; background: var(--surface); position: relative; }
 [hidden] { display: none !important; }
 .icon { flex: none; display: block; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -54,9 +54,6 @@ button { font: inherit; color: inherit; }
 .search .rx:hover { color: var(--text); }
 .search .rx.on { background: var(--text); color: var(--surface); border-color: var(--text); }
 .search.bad { border-color: var(--danger); }
-.mode-seg { display: inline-flex; flex: none; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
-.mode-seg button { border: 0; background: var(--surface); color: var(--text-muted); font: 11px var(--mono); padding: 0 8px; height: 26px; cursor: pointer; }
-.mode-seg button.on { background: var(--text); color: var(--surface); }
 .ff-err { color: var(--danger); font: 11px/1.4 var(--mono); margin-top: 4px; }
 .search-err { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; max-width: 360px; font: 11px/1.4 var(--mono); color: var(--danger); background: var(--danger-soft); border: 1px solid var(--danger); border-radius: 6px; padding: 4px 8px; white-space: normal; }
 
@@ -73,9 +70,20 @@ button { font: inherit; color: inherit; }
 /* ---- filter chips ---- */
 #chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 6px 12px; flex: none; border-bottom: 1px solid var(--border); }
 #chips .lab { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; margin-right: 2px; }
-.chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 3px 0 9px; border-radius: 999px; background: var(--accent-soft); border: 1px solid var(--accent); font-size: 12px; }
-.chip b { font-weight: 600; }
-.chip .btn-icon { width: 16px; height: 16px; border-radius: 50%; }
+/* Filter chips, Notion-like: a chip opens its rule's editor; one waiting
+   for a value is drawn plain; one chip holds a filter with "or" or groups. */
+.fchip { display: inline-flex; align-items: center; gap: 4px; height: 24px; max-width: 320px; padding: 0 6px 0 9px; border-radius: 999px; background: var(--accent-soft); border: 1px solid var(--accent); color: var(--text); font-size: 12px; cursor: pointer; }
+.fchip .tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fchip b { font-weight: 600; }
+.fchip .icon { flex: none; color: var(--text-muted); }
+.fchip.idle { background: var(--surface); border-color: var(--border-strong); color: var(--text-muted); }
+.fchip.open { box-shadow: 0 0 0 3px var(--focus-ring); }
+.fchip.bundle { max-width: min(560px, 60vw); }
+.fchip.bundle .icon:first-child { color: var(--accent); }
+.f-add { height: 24px; padding: 0 8px; display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; border: 1px dashed var(--border-strong); background: none; color: var(--text-muted); font-size: 12px; cursor: pointer; }
+.f-add:hover { color: var(--text); border-color: var(--text-muted); }
+.f-adv { height: 24px; padding: 0 8px; display: inline-flex; align-items: center; gap: 5px; border-radius: 6px; border: 0; background: none; color: var(--text-muted); font-size: 12px; cursor: pointer; }
+.f-adv:hover { color: var(--text); background: var(--surface-2); }
 .chip-clear { border: 0; background: none; color: var(--text-muted); font-size: 12px; cursor: pointer; }
 .chip-clear:hover { color: var(--text); }
 
@@ -253,6 +261,75 @@ button { font: inherit; color: inherit; }
 /* Missing cells are not a value of the column: dashed, under their own label. */
 .ff .pick.missing button:not(.on) { border-style: dashed; }
 .ff .pick + .lbl, .ff .ffrow + .lbl { margin-top: 10px; }
+
+/* ---- the filter's editor, menus and advanced filter ---- */
+.pop.fe { width: 300px; padding: 10px; z-index: 20; }
+.fe-head { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; font-size: 12px; }
+.fe-head .cn { color: var(--text-muted); font-weight: 600; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fe-head .sp, .adv-foot .sp { flex: 1; }
+.op-btn { border: 0; background: none; color: var(--text); font-size: 12px; font-weight: 600; padding: 2px 6px; border-radius: 5px; display: inline-flex; align-items: center; gap: 2px; cursor: pointer; }
+.op-btn:hover { background: var(--surface-2); }
+.fed input.tx, .fmenu input.tx { width: 100%; height: 28px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: 12px var(--sans); padding: 0 8px; outline: 0; }
+.fed input.tx:focus, .fmenu input.tx:focus { box-shadow: 0 0 0 3px var(--focus-ring); }
+.fed .rng { display: flex; gap: 6px; align-items: center; }
+.fed .hint, .fadv .hint, #fadv .hint { font-size: 11px; color: var(--text-faint); padding: 4px 2px; }
+/* The picked values, as pills in the search box. */
+.vbox { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 28px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface-2); cursor: text; }
+.vbox:focus-within { box-shadow: 0 0 0 3px var(--focus-ring); }
+.vbox input { flex: 1; min-width: 70px; height: 20px; border: 0; outline: 0; background: none; color: var(--text); font: 12px var(--sans); padding: 0 2px; }
+.vtag { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; height: 20px; padding: 0 2px 0 7px; border-radius: 4px; background: var(--surface-3); color: var(--text); font-size: 12px; }
+.vtag .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.vtag.strike .t { text-decoration: line-through; color: var(--text-muted); }
+.vtag.armed { box-shadow: 0 0 0 1px var(--accent); }
+.vtag button { width: 16px; height: 16px; flex: none; padding: 0; border: 0; border-radius: 3px; background: none; color: var(--text-muted); display: grid; place-items: center; cursor: pointer; }
+.vtag button:hover { background: var(--border-strong); color: var(--text); }
+.vlist { margin-top: 6px; max-height: 220px; overflow: auto; display: flex; flex-direction: column; }
+.vlist label { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+.vlist label:hover { background: var(--surface-2); }
+.vlist input[type="checkbox"] { flex: none; width: auto; height: auto; margin: 0; padding: 0; box-shadow: none; accent-color: var(--accent); }
+.vlist .lv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.vlist .lv.strike, .tok .t.strike { text-decoration: line-through; color: var(--text-muted); }
+.vlist .n { margin-left: auto; color: var(--text-faint); font-variant-numeric: tabular-nums; flex: none; }
+.vlist .vadd { display: flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--text-muted); font-size: 12px; padding: 5px 6px; border-radius: 6px; cursor: pointer; text-align: left; }
+.vlist .vadd:hover { background: var(--surface-2); color: var(--text); }
+.fmenu { position: absolute; z-index: 40; min-width: 180px; max-height: 360px; overflow: auto; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: var(--shadow); padding: 4px; }
+.fmenu input.tx { height: 26px; margin-bottom: 4px; }
+.fmenu > button, .fmenu .mlist > button { display: flex; width: 100%; align-items: center; gap: 8px; border: 0; background: none; color: var(--text); font-size: 12px; padding: 5px 8px; border-radius: 5px; cursor: pointer; text-align: left; }
+.fmenu button:hover, .fmenu button.on { background: var(--surface-2); }
+.fmenu button .lb { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fmenu button .typ { margin-left: auto; }
+.fmenu button.danger { color: var(--danger); }
+.fmenu .sepl { height: 1px; background: var(--border); margin: 4px 0; }
+.fmenu .fed .vlist { margin-top: 4px; }
+.pop.adv { width: 720px; max-width: calc(100vw - 20px); padding: 12px; z-index: 20; }
+.adv-title { font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+.adv-row { display: grid; grid-template-columns: 62px 132px 150px minmax(0, 1fr) 24px; gap: 6px; align-items: center; margin-bottom: 6px; }
+.adv-row.g { grid-template-columns: 62px minmax(0, 1fr); align-items: start; }
+.adv-group { border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 8px 2px; background: var(--surface-2); }
+.adv-group .adv-row { grid-template-columns: 56px 120px 140px minmax(0, 1fr) 24px; }
+.adv-group input.tx { background: var(--surface); }
+.adv-group .gfoot { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.adv-row .cw { font-size: 12px; color: var(--text-muted); padding-left: 4px; }
+.adv-row .nested { grid-column: span 3; font-size: 12px; color: var(--text-muted); font-style: italic; }
+.adv-row select { height: 28px; width: 100%; min-width: 0; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: 12px var(--sans); padding: 0 4px; outline: 0; cursor: pointer; }
+.adv-row select:focus { box-shadow: 0 0 0 3px var(--focus-ring); }
+.adv-row select.cj { color: var(--accent); font-weight: 600; }
+.adv-row .tok { height: 28px; width: 100%; display: flex; align-items: center; gap: 4px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 12px; cursor: pointer; overflow: hidden; }
+.adv-row .tok .t { background: var(--surface-3); border-radius: 4px; padding: 0 6px; white-space: nowrap; }
+.adv-row .tok .ph { color: var(--text-faint); }
+.adv-foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 6px; }
+.lnk { border: 0; background: none; color: var(--text-muted); font-size: 12px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; padding: 3px 6px; border-radius: 5px; }
+.lnk:hover { color: var(--text); background: var(--surface-3); }
+.lnk.danger:hover { color: var(--danger); }
+#colpop .ff .fe-head { margin-bottom: 4px; }
+#colpop .inadv { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+/* Narrow screens: a rule's value goes under its column and condition. */
+@media (max-width: 720px) {
+  .adv-row, .adv-group .adv-row { grid-template-columns: 52px minmax(0, 1fr) minmax(0, 1fr) 24px; }
+  .adv-row:not(.g) > :nth-child(4) { grid-column: 2 / 4; grid-row: 2; }
+  .adv-row:not(.g) > :nth-child(5) { grid-column: 4; grid-row: 1; }
+  .adv-row.g { grid-template-columns: 52px minmax(0, 1fr); }
+}
 
 /* ---- status bar ---- */
 #status { display: flex; align-items: center; gap: 14px; height: 26px; flex: none; padding: 0 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; background: var(--bg); white-space: nowrap; overflow: hidden; }

@@ -21,7 +21,7 @@ The name, xxsv (ex-ex-es-vee), stands for eXtended [xsv](https://github.com/Burn
 - Spreadsheet-like. Select cells, ranges, whole columns or rows with the mouse or the arrow keys, copy it, and see the count, sum, average, minimum and maximum of the range.
 - A distribution for every column. A histogram or the top values sit under each column name; click one for statistics and filters.
 - Columns. Hide columns and drag them into another order, and sort by several columns at once.
-- Search and filter with plain text or regular expressions (RE2), across all cells or in one column.
+- Search with plain text or a regular expression (RE2) across all cells. Filter like Notion: each rule is a chip that picks its condition (is one of several values, is not, contains, starts with, ends with, matches a regular expression, =, ≥, ≤, between, is empty, and their opposites) and applies as you type. The advanced filter joins rules with and or or, and groups them one level deep.
 - Values. List every value of a column with its count, most frequent first, and filter by one with a click.
 - Rows. Show the selected row with every column on its own line, the hidden ones too.
 - Export what you see, every matching row in the shown columns and order, as CSV, TSV or JSONL.
@@ -87,7 +87,7 @@ In the page:
 | `/` | Search all cells (`.*` beside the box for a regular expression) |
 | Esc | Close a popover or a menu, leave the search |
 
-A column's distribution, under its name, opens its statistics and filters, and from there the list of its values or hiding it. The Columns button lists every column to show, hide and move; Export writes the view to a file.
+A column's distribution, under its name, opens its statistics and its filter, and from there the list of its values or hiding it. The Filter button adds a rule on any column; the Columns button lists every column to show, hide and move; Export writes the view to a file.
 
 The view (search, filters, sort keys, shown columns, scroll position) is kept in the URL, so a reload of the page or a copied link opens the same view. Settings (theme, accent, number colors, digit grouping, histogram scale) are saved in the browser.
 

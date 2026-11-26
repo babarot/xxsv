@@ -1,4 +1,4 @@
-import { test, expect, open, cell, column, saveAndWait } from "./fixtures";
+import { test, expect, open, cell, column, saveAndWait, removeChip } from "./fixtures";
 
 const names = (page: import("@playwright/test").Page) => page.locator("#header .names .nm").allTextContents();
 
@@ -52,7 +52,7 @@ test("aggregates and selects in the shown columns, and sorts and filters by a hi
   await page.goto(xxsv.url + "#" + encodeURIComponent(JSON.stringify(view)));
   await expect(cell(page, 0, 0)).toHaveText("20"); // filtered by the hidden b
   await expect(page.locator("#counts")).toHaveText("1 of 3 rows · 2 columns · 1 hidden");
-  await page.locator("#chips .chip .btn-icon").click(); // drop the filter on the hidden b
+  await removeChip(page); // drop the filter on the hidden b
   await expect.poll(() => column(page, 0, 3)).toEqual(["30", "20", "10"]); // sorted by a, shown second
   // A range over the first shown column sums c, not the file's first column.
   await cell(page, 0, 0).click();

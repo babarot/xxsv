@@ -1,4 +1,4 @@
-import { test, expect, open, cell } from "./fixtures";
+import { test, expect, open, cell, chips } from "./fixtures";
 
 const long = "x".repeat(600); // cut by the server (400 bytes in the table)
 const json = '{"k":[1,2,3],"s":"v"}';
@@ -53,7 +53,7 @@ test("pretty-prints JSON and filters by the value", async ({ page, serve }) => {
   await page.keyboard.press(" ");
   await page.locator("#peek").getByRole("button", { name: "Filter by this value" }).click();
   await expect(page.locator("#counts")).toHaveText("1 of 2 rows · 3 columns");
-  await expect(page.locator("#chips .chip")).toHaveCount(1);
+  await expect(chips(page)).toHaveCount(1);
 });
 
 test("keeps Copy and Filter disabled until the full value arrives", async ({ page, serve }) => {

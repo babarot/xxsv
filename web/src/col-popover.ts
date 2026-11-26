@@ -1,10 +1,11 @@
 // The distribution popover of a column: chart, statistics and filters.
 import { NULL_MARK } from "./constants.ts";
-import { abbr, edgeLabel, fmt, histStep, invalidText, isRange, round } from "./format.ts";
+import { abbr, edgeLabel, fmt, histStep, invalidText, round } from "./format.ts";
+import { defaultRule, inGroup, incomplete, topRules } from "./filters.ts";
+import { openAdvanced, opButton, ruleEditor } from "./filter-ui.ts";
 import { icon } from "./icons.ts";
 import type { Column, Filter, Stats } from "./types.ts";
-import { S, currentQuery, setFilter, showColumns, toggleColPop, toggleMissing } from "./app.ts";
-import { check } from "./search.ts";
+import { S, filtersChanged, setFilter, showColumns, toggleColPop, toggleMissing } from "./app.ts";
 import { positionPopovers } from "./cell-popover.ts";
 import { barsMax, histOf, histogram, missingLine, rowsOf, topBars } from "./charts.ts";
 import { $, el } from "./dom.ts";
@@ -42,7 +43,7 @@ export function renderColPop() {
   } else {
     pop.appendChild(el("div", "dim", c.type === "json" ? "Nested JSON values have no chart." : "No values."));
   }
-  const missOn = S.view.filters.some((f) => f.column === c.name && f.op === "null");
+  const missOn = topRules(S.view.filters, c.name).some((f) => f.op === "null");
   const miss = s && missingLine(s, missOn, h ? rowsOf(s) : barsMax(s));
   if (miss) {
     miss.querySelector("button")!.addEventListener("click", () => toggleMissing(c.name));
@@ -75,118 +76,78 @@ export function renderColPop() {
   positionPopovers();
 }
 
+// filterForm edits the column's rule in place, with the same editor as its
+// chip; a column in "or" rules or groups is edited in the advanced filter.
+// Missing and invalid cells have a row of their own under it.
 export function filterForm(c: Column, s?: Stats) {
-  const current = S.view.filters.find((f) => f.column === c.name);
   const box = el("div", "ff");
   box.appendChild(el("div", "lbl", "Filter"));
-  const row = el("div", "ffrow");
-  const field = (value: string, placeholder: string) => {
-    const i = el("input") as HTMLInputElement;
-    i.value = value;
-    i.placeholder = placeholder;
-    return i;
+  const mine = topRules(S.view.filters, c.name);
+  if (inGroup(S.view.filters, c.name) || mine.length > 1) {
+    const note = el("div", "inadv");
+    note.append(el("span", "", `${c.name} is part of the advanced filter.`));
+    const go = el("button", "btn-ghost") as HTMLButtonElement;
+    go.append(icon("sliders", 13), el("span", "btn-label", "Edit filter"));
+    go.addEventListener("click", () => {
+      toggleColPop(S.colPop!);
+      openAdvanced();
+    });
+    box.append(note, go);
+    box.append(...missingRow(c, s, mine[0]));
+    return box;
+  }
+  // A new rule waits here until it has a value, then joins the filters.
+  const current = mine[0];
+  if (!current && draft?.column !== c.name) draft = defaultRule(c.name, c.type);
+  const f = current ?? draft!;
+  const join = () => {
+    if (!S.view.filters.includes(f) && !incomplete(f)) {
+      S.view.filters = [...S.view.filters, f];
+      draft = null;
+    }
   };
-  // Missing cells are filtered from a row of their own, under a label and
-  // with dashed borders, so they do not read as values of the column, after
-  // the value filters. Only columns with missing cells get it.
-  const missing = (): HTMLElement[] => {
-    if (!s || (s.nulls === 0 && s.invalid === 0)) return [];
-    const opt = (op: "null" | "notnull" | "invalid", label: string, count: number) => {
-      const on = current?.op === op;
-      const b = el("button", on ? "on" : "") as HTMLButtonElement;
-      b.dataset.op = op;
-      b.title = `${label} (${fmt(count)})`;
-      b.append(el("em", "", label), el("span", "", abbr(count)));
-      b.addEventListener("click", () => setFilter(c.name, on ? null : { column: c.name, op }));
-      return b;
-    };
-    const pick = el("div", "pick missing");
-    if (s.nulls > 0) pick.append(opt("null", `${NULL_MARK} only`, s.nulls), opt("notnull", `exclude ${NULL_MARK}`, s.count + s.invalid));
-    // Cells whose text is not a value of the type ("pending" in numbers).
-    if (s.invalid > 0) pick.append(opt("invalid", invalidText(c.type), s.invalid));
-    return [el("div", "lbl", "Missing"), pick];
+  const commit = () => {
+    join();
+    filtersChanged(true);
   };
-  const actions = el("div", "actions");
-  const apply = el("button", "btn-primary") as HTMLButtonElement;
-  apply.append(icon("filter", 13), el("span", "btn-label", "Apply"));
-  actions.appendChild(apply);
+  const head = el("div", "fe-head");
+  head.append(opButton(f, () => {
+    join();
+    filtersChanged();
+    renderColPop();
+  }), el("span", "sp"));
   if (current) {
-    const clear = el("button", "btn-ghost") as HTMLButtonElement;
-    clear.append(el("span", "btn-label", "Clear"));
+    const clear = el("button", "lnk") as HTMLButtonElement;
+    clear.textContent = "Clear";
     clear.addEventListener("click", () => setFilter(c.name, null));
-    actions.appendChild(clear);
+    head.appendChild(clear);
   }
-  if (isRange(c.type)) {
-    const ph = c.type === "date" ? "YYYY-MM-DD" : c.type === "datetime" ? "YYYY-MM-DD hh:mm" : "";
-    const lo = field(current?.op === "range" ? current.min ?? "" : "", ("min " + ph).trim());
-    const hi = field(current?.op === "range" ? current.max ?? "" : "", ("max " + ph).trim());
-    row.append(lo, el("span", "dim", "–"), hi);
-    box.appendChild(row);
-    box.append(...missing());
-    const go = () => {
-      const f: Filter = { column: c.name, op: "range" };
-      if (lo.value.trim()) f.min = lo.value.trim();
-      if (hi.value.trim()) f.max = hi.value.trim();
-      setFilter(c.name, f.min || f.max ? f : null);
-    };
-    apply.addEventListener("click", go);
-    for (const i of [lo, hi]) i.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
-  } else {
-    const pick = el("div", "pick");
-    if (s?.top?.length && c.type !== "json") {
-      for (const t of s.top.slice(0, 8)) {
-        const on = current?.op === "equals" && current.value === t.value;
-        const b = el("button", on ? "on" : "") as HTMLButtonElement;
-        b.title = `${t.value === "" ? "(empty)" : t.value} (${fmt(t.count)})`;
-        b.append(el("em", "", t.value === "" ? "(empty)" : t.value), el("span", "", abbr(t.count)));
-        b.addEventListener("click", () => setFilter(c.name, on ? null : { column: c.name, op: "equals", value: t.value }));
-        pick.appendChild(b);
-      }
-    }
-    if (pick.childElementCount) box.appendChild(pick);
-    // Text: contains, or a regular expression with .* (checked by the
-    // server before it is applied; an error shows under the box).
-    let regex = current?.op === "regex";
-    const q = field(current?.op === "contains" || current?.op === "regex" ? current.value ?? "" : "", "");
-    const mode = el("span", "mode-seg");
-    const err = el("div", "ff-err");
-    err.hidden = true;
-    const setMode = (on: boolean) => {
-      regex = on;
-      mode.querySelectorAll("button").forEach((b) => b.classList.toggle("on", (b.dataset.mode === "regex") === on));
-      q.placeholder = on ? "regex (RE2)…" : "contains…";
-      err.hidden = true;
-    };
-    for (const [m, label, title] of [["contains", "abc", "Contains the text"], ["regex", ".*", "Matches a regular expression (RE2)"]]) {
-      const b = el("button", "", label) as HTMLButtonElement;
-      b.dataset.mode = m;
-      b.title = title;
-      b.addEventListener("click", () => setMode(m === "regex"));
-      mode.appendChild(b);
-    }
-    setMode(regex);
-    row.append(mode, q);
-    box.appendChild(row);
-    box.appendChild(err);
-    box.append(...missing());
-    const go = async () => {
-      // A regular expression keeps its spaces; contains text is trimmed.
-      const value = regex ? q.value : q.value.trim();
-      if (!value) return setFilter(c.name, null);
-      const f: Filter = { column: c.name, op: regex ? "regex" : "contains", value };
-      if (regex) {
-        const msg = await check({ ...currentQuery(), filters: [...S.view.filters.filter((x) => x.column !== c.name), f] });
-        err.hidden = !msg;
-        err.textContent = msg.replace(/^filter on "[^"]*": /, "");
-        if (msg) return;
-      }
-      setFilter(c.name, f);
-    };
-    apply.addEventListener("click", () => void go());
-    q.addEventListener("keydown", (e) => { if (e.key === "Enter") void go(); });
-  }
-  box.appendChild(actions);
+  box.append(head, ruleEditor(f, commit, false));
+  box.append(...missingRow(c, s, current));
   return box;
+}
+
+let draft: Filter | null = null;
+
+// missingRow filters to missing or invalid cells, under a label and with
+// dashed borders, so they do not read as values of the column. Only columns
+// with such cells get it.
+function missingRow(c: Column, s: Stats | undefined, current: Filter | undefined): HTMLElement[] {
+  if (!s || (s.nulls === 0 && s.invalid === 0)) return [];
+  const opt = (op: "null" | "notnull" | "invalid", label: string, count: number) => {
+    const on = current?.op === op && !current.not;
+    const b = el("button", on ? "on" : "") as HTMLButtonElement;
+    b.dataset.op = op;
+    b.title = `${label} (${fmt(count)})`;
+    b.append(el("em", "", label), el("span", "", abbr(count)));
+    b.addEventListener("click", () => setFilter(c.name, on ? null : { column: c.name, op }));
+    return b;
+  };
+  const pick = el("div", "pick missing");
+  if (s.nulls > 0) pick.append(opt("null", `${NULL_MARK} only`, s.nulls), opt("notnull", `exclude ${NULL_MARK}`, s.count + s.invalid));
+  // Cells whose text is not a value of the type ("pending" in numbers).
+  if (s.invalid > 0) pick.append(opt("invalid", invalidText(c.type), s.invalid));
+  return [el("div", "lbl", "Missing"), pick];
 }
 
 // columnActions list the column's values in the side panel, or hide the
