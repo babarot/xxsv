@@ -42,7 +42,7 @@ test("filters a column with a regular expression", async ({ page, serve }) => {
   const xxsv = await serve("t.csv", csv(30));
   await open(page, xxsv.url);
   await page.locator('[data-prof="1"]').click();
-  await page.locator('#colpop .mode-seg [data-mode="regex"]').click();
+  await page.locator("#colpop select.ff-op").selectOption("regex");
   const box = page.locator('#colpop input[placeholder="regex (RE2)…"]');
   await box.fill("^item(1|2");
   await box.press("Enter");

@@ -86,6 +86,14 @@ func TestFilters(t *testing.T) {
 		{"date range", Filter{Column: "day", Op: OpRange, Min: "2024-01-01", Max: "2024-02-29"}, []int{0, 4}},
 		{"null", Filter{Column: "score", Op: OpNull}, []int{1}},
 		{"notnull", Filter{Column: "ok", Op: OpNotNull}, []int{0, 1, 2, 3}},
+		{"prefix ignores ASCII case", Filter{Column: "note", Op: OpPrefix, Value: "HEL"}, []int{0}},
+		{"suffix", Filter{Column: "note", Op: OpSuffix, Value: "lo"}, []int{2}},
+		{"suffix longer than the cell", Filter{Column: "name", Op: OpSuffix, Value: "xxbob"}, []int{}},
+		{"not equals keeps missing cells", Filter{Column: "ok", Op: OpEquals, Value: "false", Not: true}, []int{0, 2, 4}},
+		{"not contains", Filter{Column: "name", Op: OpContains, Value: "A", Not: true}, []int{1, 4}},
+		{"not prefix", Filter{Column: "note", Op: OpPrefix, Value: "w", Not: true}, []int{0, 1, 2, 4}},
+		{"not regex", Filter{Column: "note", Op: OpRegex, Value: `l+o\b`, Not: true}, []int{1, 3, 4}},
+		{"not range keeps missing cells", Filter{Column: "score", Op: OpRange, Min: "2", Max: "3.5", Not: true}, []int{1, 2, 4}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

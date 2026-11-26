@@ -124,7 +124,7 @@ function draw() {
   const max = Math.max(1, ...items.map((i) => i.count));
   list!.replaceChildren();
   for (const it of items) {
-    const on = !!active && (it.missing ? active.op === "null" : active.op === "equals" && active.value === it.value);
+    const on = !!active && (it.missing ? active.op === "null" : active.op === "equals" && !active.not && active.value === it.value);
     const row = el("button", "vals-item" + (on ? " on" : "")) as HTMLButtonElement;
     const label = el("span", it.missing ? "null" : "", it.missing ? `${NULL_MARK} (missing)` : it.value === "" ? "(empty)" : it.value + (it.cut ? "…" : ""));
     const bar = el("em");

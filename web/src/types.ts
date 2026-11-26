@@ -33,7 +33,8 @@ export interface Stats {
   top?: { value: string; count: number }[];
 }
 
-export interface Filter { column: string; op: "contains" | "regex" | "equals" | "range" | "null" | "notnull" | "invalid"; value?: string; min?: string; max?: string }
+// not keeps the rows the op does not (missing and invalid cells too).
+export interface Filter { column: string; op: "contains" | "prefix" | "suffix" | "regex" | "equals" | "range" | "null" | "notnull" | "invalid"; not?: boolean; value?: string; min?: string; max?: string }
 export interface Sort { column: string; desc?: boolean }
 
 export interface RowsResponse {

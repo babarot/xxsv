@@ -123,6 +123,39 @@ test("filters by a top value button and toggles it off", async ({ page, serve })
   await expect(page.locator("#counts")).toHaveText("3 rows · 2 columns");
 });
 
+test("negates a filter with the condition menu", async ({ page, serve }) => {
+  const xxsv = await serve("t.csv", "k,v\na,1\na,2\nb,3\nab,4\n,5\n");
+  await open(page, xxsv.url);
+  await page.locator('[data-prof="0"]').click();
+  const op = page.locator("#colpop select.ff-op");
+  // "is not" a value pill keeps the other values and the missing cell.
+  await op.selectOption("!equals");
+  await page.locator("#colpop .pick button").filter({ hasText: /^a/ }).first().click();
+  await expect(page.locator("#chips .chip")).toHaveText("k is not “a”");
+  await expect(page.locator("#counts")).toHaveText("3 of 5 rows · 2 columns");
+  await expect(page.locator("#colpop .pick button.on.not")).toHaveCount(1);
+  await expect(op).toHaveValue("!equals");
+  // Text conditions from the same menu.
+  await op.selectOption("!contains");
+  const box = page.locator('#colpop input[placeholder="contains…"]');
+  await box.fill("b");
+  await box.press("Enter");
+  await expect(page.locator("#chips .chip")).toHaveText("k does not contain “b”");
+  await expect(page.locator("#counts")).toHaveText("3 of 5 rows · 2 columns");
+  await op.selectOption("prefix");
+  await page.locator('#colpop input[placeholder="starts with…"]').press("Enter");
+  await expect(page.locator("#chips .chip")).toHaveText("k starts with “b”");
+  await expect(page.locator("#counts")).toHaveText("1 of 5 rows · 2 columns");
+  // "not between" on a number column.
+  await page.keyboard.press("Escape");
+  await page.locator('[data-prof="1"]').click();
+  await page.locator("#colpop select.ff-op").selectOption("!range");
+  await page.locator("#colpop .ff input").first().fill("2");
+  await page.locator("#colpop .ff input").nth(1).fill("4");
+  await page.locator("#colpop .ff input").nth(1).press("Enter");
+  await expect(page.locator("#chips .chip").nth(1)).toHaveText("v not 2 – 4");
+});
+
 test("restores the view from the URL hash", async ({ page, serve }) => {
   const xxsv = await serve("t.csv", csv(100));
   const view = { search: "item1", filters: [{ column: "qty", op: "range", min: "50" }], sort: { column: "qty", desc: true }, top: 0 };

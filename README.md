@@ -21,7 +21,7 @@ The name, xxsv (ex-ex-es-vee), stands for eXtended [xsv](https://github.com/Burn
 - Spreadsheet-like. Select cells, ranges, whole columns or rows with the mouse or the arrow keys, copy it, and see the count, sum, average, minimum and maximum of the range.
 - A distribution for every column. A histogram or the top values sit under each column name; click one for statistics and filters.
 - Columns. Hide columns and drag them into another order, and sort by several columns at once.
-- Search and filter with plain text or regular expressions (RE2), across all cells or in one column.
+- Search and filter with plain text or regular expressions (RE2), across all cells or in one column. A column's filter picks its condition, like Notion: is, is not, contains, does not contain, starts with, ends with, matches a regular expression or not, and between or not between for numbers and dates.
 - Values. List every value of a column with its count, most frequent first, and filter by one with a click.
 - Rows. Show the selected row with every column on its own line, the hidden ones too.
 - Export what you see, every matching row in the shown columns and order, as CSV, TSV or JSONL.

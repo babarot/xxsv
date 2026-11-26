@@ -76,14 +76,18 @@ export const invalidText = (t: ColType | undefined) =>
 // filterText describes a filter as [column, condition]; type is the
 // column's, for naming invalid cells.
 export function filterText(f: Filter, type?: ColType): [string, string] {
+  const v = `“${f.value ?? ""}”`;
+  const not = !!f.not;
   switch (f.op) {
-    case "invalid": return [f.column, `is ${invalidText(type)}`];
-    case "range": return [f.column, `${f.min ?? "…"} – ${f.max ?? "…"}`];
-    case "null": return [f.column, "is missing"];
-    case "notnull": return [f.column, "is not missing"];
-    case "equals": return [f.column, `is “${f.value ?? ""}”`];
-    case "regex": return [f.column, `matches /${f.value ?? ""}/`];
-    default: return [f.column, `contains “${f.value ?? ""}”`];
+    case "invalid": return [f.column, not ? "is valid" : `is ${invalidText(type)}`];
+    case "range": return [f.column, `${not ? "not " : ""}${f.min ?? "…"} – ${f.max ?? "…"}`];
+    case "null": return [f.column, not ? "is not missing" : "is missing"];
+    case "notnull": return [f.column, not ? "is missing" : "is not missing"];
+    case "equals": return [f.column, `${not ? "is not" : "is"} ${v}`];
+    case "regex": return [f.column, `${not ? "does not match" : "matches"} /${f.value ?? ""}/`];
+    case "prefix": return [f.column, `${not ? "does not start" : "starts"} with ${v}`];
+    case "suffix": return [f.column, `${not ? "does not end" : "ends"} with ${v}`];
+    default: return [f.column, `${not ? "does not contain" : "contains"} ${v}`];
   }
 }
 

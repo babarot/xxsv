@@ -44,11 +44,16 @@ type Query struct {
 	MaxCellBytes int `json:"maxCellBytes,omitempty"`
 }
 
-// Filter keeps the rows whose cell in Column satisfies Op.
+// Filter keeps the rows whose cell in Column satisfies Op, or with Not,
+// the rows whose cell does not. Not keeps missing and invalid cells too
+// ("is not x" keeps an empty cell, like Notion), except where Op already
+// names them.
 type Filter struct {
 	Column string `json:"column"`
 	Op     Op     `json:"op"`
-	// Value is the text for OpContains and OpEquals.
+	Not    bool   `json:"not,omitempty"`
+	// Value is the text for OpContains, OpPrefix, OpSuffix, OpEquals and
+	// OpRegex.
 	Value string `json:"value,omitempty"`
 	// Min and Max bound OpRange, inclusive; either may be empty. They are
 	// read as the column's type: an integer, a number, or a date or
@@ -62,6 +67,10 @@ type Op string
 
 const (
 	OpContains Op = "contains" // any column: the raw text contains Value
+	// OpPrefix and OpSuffix: the raw text starts or ends with Value. Like
+	// OpContains, ASCII letters match regardless of case.
+	OpPrefix Op = "prefix"
+	OpSuffix Op = "suffix"
 	// OpEquals: the raw text equals Value. Boolean values ignore case and
 	// surrounding spaces; invalid text in a boolean column must equal Value
 	// exactly, like any other text.
@@ -483,6 +492,14 @@ func (e *Engine) filter(preds []func(int) bool) []int32 {
 }
 
 func (e *Engine) compile(f Filter) (func(int) bool, error) {
+	p, err := e.compileOp(f)
+	if err != nil || !f.Not {
+		return p, err
+	}
+	return func(r int) bool { return !p(r) }, nil
+}
+
+func (e *Engine) compileOp(f Filter) (func(int) bool, error) {
 	i, ok := e.index[f.Column]
 	if !ok {
 		return nil, badQuery("unknown filter column %q", f.Column)
@@ -504,6 +521,18 @@ func (e *Engine) compile(f Filter) (func(int) bool, error) {
 	case OpContains:
 		needle := lowerASCII(f.Value)
 		return func(r int) bool { return containsFold(c.Raw[r], needle) }, nil
+	case OpPrefix:
+		needle := lowerASCII(f.Value)
+		return func(r int) bool {
+			s := c.Raw[r]
+			return len(s) >= len(needle) && equalFold(s[:len(needle)], needle)
+		}, nil
+	case OpSuffix:
+		needle := lowerASCII(f.Value)
+		return func(r int) bool {
+			s := c.Raw[r]
+			return len(s) >= len(needle) && equalFold(s[len(s)-len(needle):], needle)
+		}, nil
 	case OpEquals:
 		if c.Type == table.Boolean {
 			want := strings.TrimSpace(f.Value)
@@ -660,6 +689,22 @@ func lowerASCII(s string) string {
 		}
 	}
 	return string(b)
+}
+
+// equalFold reports whether s equals needle, which must be lower-case
+// ASCII-wise; ASCII letters in s match regardless of case. The two must be
+// of the same length.
+func equalFold(s, needle string) bool {
+	for i := 0; i < len(needle); i++ {
+		c := s[i]
+		if 'A' <= c && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		if c != needle[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // containsFold reports whether s contains needle, which must be lower-case

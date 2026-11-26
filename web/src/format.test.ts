@@ -47,6 +47,12 @@ test("filterText describes each kind of filter", () => {
   assert.deepEqual(filterText({ column: "q", op: "notnull" }), ["q", "is not missing"]);
   assert.deepEqual(filterText({ column: "q", op: "equals", value: "a" }), ["q", "is “a”"]);
   assert.deepEqual(filterText({ column: "q", op: "contains", value: "b" }), ["q", "contains “b”"]);
+  assert.deepEqual(filterText({ column: "q", op: "equals", value: "a", not: true }), ["q", "is not “a”"]);
+  assert.deepEqual(filterText({ column: "q", op: "contains", value: "b", not: true }), ["q", "does not contain “b”"]);
+  assert.deepEqual(filterText({ column: "q", op: "prefix", value: "c" }), ["q", "starts with “c”"]);
+  assert.deepEqual(filterText({ column: "q", op: "suffix", value: "d" }), ["q", "ends with “d”"]);
+  assert.deepEqual(filterText({ column: "q", op: "regex", value: "e", not: true }), ["q", "does not match /e/"]);
+  assert.deepEqual(filterText({ column: "q", op: "range", min: "1", max: "2", not: true }), ["q", "not 1 – 2"]);
   assert.deepEqual(filterText({ column: "q", op: "invalid" }, "integer"), ["q", "is not a number"]);
   assert.deepEqual(filterText({ column: "q", op: "invalid" }, "datetime"), ["q", "is not a date"]);
   assert.deepEqual(filterText({ column: "q", op: "invalid" }, "boolean"), ["q", "is not true/false"]);

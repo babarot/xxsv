@@ -54,9 +54,6 @@ button { font: inherit; color: inherit; }
 .search .rx:hover { color: var(--text); }
 .search .rx.on { background: var(--text); color: var(--surface); border-color: var(--text); }
 .search.bad { border-color: var(--danger); }
-.mode-seg { display: inline-flex; flex: none; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
-.mode-seg button { border: 0; background: var(--surface); color: var(--text-muted); font: 11px var(--mono); padding: 0 8px; height: 26px; cursor: pointer; }
-.mode-seg button.on { background: var(--text); color: var(--surface); }
 .ff-err { color: var(--danger); font: 11px/1.4 var(--mono); margin-top: 4px; }
 .search-err { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; max-width: 360px; font: 11px/1.4 var(--mono); color: var(--danger); background: var(--danger-soft); border: 1px solid var(--danger); border-radius: 6px; padding: 4px 8px; white-space: normal; }
 
@@ -242,6 +239,10 @@ button { font: inherit; color: inherit; }
 .ff .ffrow { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
 .ff input { flex: 1; min-width: 0; height: 28px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: 12px var(--sans); padding: 0 8px; outline: 0; }
 .ff input:focus { box-shadow: 0 0 0 3px var(--focus-ring); }
+.ff select.ff-op { height: 28px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: 12px var(--sans); padding: 0 6px; outline: 0; cursor: pointer; }
+.ff select.ff-op:focus { box-shadow: 0 0 0 3px var(--focus-ring); }
+.ff .ffop { margin-top: 0; }
+.ff .ffop + .pick { margin-top: 6px; }
 .ff .pick { display: flex; flex-wrap: wrap; gap: 4px; }
 /* A long value is cut with an ellipsis inside its pill (full text in the
    tooltip); the count always stays visible. */
@@ -250,6 +251,8 @@ button { font: inherit; color: inherit; }
 .ff .pick button span { color: var(--text-faint); font-variant-numeric: tabular-nums; flex: none; }
 .ff .pick button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
 .ff .pick button.on span { color: inherit; opacity: .7; }
+/* "is not" a value: the pill is on, its value struck through. */
+.ff .pick button.on.not em { text-decoration: line-through; }
 /* Missing cells are not a value of the column: dashed, under their own label. */
 .ff .pick.missing button:not(.on) { border-style: dashed; }
 .ff .pick + .lbl, .ff .ffrow + .lbl { margin-top: 10px; }

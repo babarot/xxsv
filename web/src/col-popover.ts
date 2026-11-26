@@ -118,6 +118,8 @@ export function filterForm(c: Column, s?: Stats) {
   }
   if (isRange(c.type)) {
     const ph = c.type === "date" ? "YYYY-MM-DD" : c.type === "datetime" ? "YYYY-MM-DD hh:mm" : "";
+    const op = opSelect(RANGE_OPS, current?.op === "range" ? opKey(current) : "range");
+    box.appendChild(opRow(op));
     const lo = field(current?.op === "range" ? current.min ?? "" : "", ("min " + ph).trim());
     const hi = field(current?.op === "range" ? current.max ?? "" : "", ("max " + ph).trim());
     row.append(lo, el("span", "dim", "–"), hi);
@@ -125,6 +127,7 @@ export function filterForm(c: Column, s?: Stats) {
     box.append(...missing());
     const go = () => {
       const f: Filter = { column: c.name, op: "range" };
+      if (op.value === "!range") f.not = true;
       if (lo.value.trim()) f.min = lo.value.trim();
       if (hi.value.trim()) f.max = hi.value.trim();
       setFilter(c.name, f.min || f.max ? f : null);
@@ -132,48 +135,52 @@ export function filterForm(c: Column, s?: Stats) {
     apply.addEventListener("click", go);
     for (const i of [lo, hi]) i.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
   } else {
+    // The operator, Notion-like: is, is not, contains, ... A value pill
+    // applies "is" or "is not", whichever is chosen ("is" for the others).
+    const known = current && TEXT_OPS.some(([k]) => k === opKey(current));
+    const op = opSelect(TEXT_OPS, known ? opKey(current!) : "contains");
+    box.appendChild(opRow(op));
     const pick = el("div", "pick");
     if (s?.top?.length && c.type !== "json") {
       for (const t of s.top.slice(0, 8)) {
         const on = current?.op === "equals" && current.value === t.value;
-        const b = el("button", on ? "on" : "") as HTMLButtonElement;
+        const b = el("button", on ? (current!.not ? "on not" : "on") : "") as HTMLButtonElement;
         b.title = `${t.value === "" ? "(empty)" : t.value} (${fmt(t.count)})`;
         b.append(el("em", "", t.value === "" ? "(empty)" : t.value), el("span", "", abbr(t.count)));
-        b.addEventListener("click", () => setFilter(c.name, on ? null : { column: c.name, op: "equals", value: t.value }));
+        b.addEventListener("click", () => {
+          if (on) return setFilter(c.name, null);
+          const f: Filter = { column: c.name, op: "equals", value: t.value };
+          if (op.value === "!equals") f.not = true;
+          setFilter(c.name, f);
+        });
         pick.appendChild(b);
       }
     }
     if (pick.childElementCount) box.appendChild(pick);
-    // Text: contains, or a regular expression with .* (checked by the
-    // server before it is applied; an error shows under the box).
-    let regex = current?.op === "regex";
-    const q = field(current?.op === "contains" || current?.op === "regex" ? current.value ?? "" : "", "");
-    const mode = el("span", "mode-seg");
+    // A regular expression is checked by the server before it is applied;
+    // an error shows under the box.
+    const q = field(current && current.op !== "range" && current.value !== undefined ? current.value : "", "");
     const err = el("div", "ff-err");
     err.hidden = true;
-    const setMode = (on: boolean) => {
-      regex = on;
-      mode.querySelectorAll("button").forEach((b) => b.classList.toggle("on", (b.dataset.mode === "regex") === on));
-      q.placeholder = on ? "regex (RE2)…" : "contains…";
+    const placeholder = () => {
+      const [, base] = parseKey(op.value);
+      q.placeholder = base === "regex" ? "regex (RE2)…" : base === "equals" ? "exact value…" : base === "prefix" ? "starts with…" : base === "suffix" ? "ends with…" : "contains…";
       err.hidden = true;
     };
-    for (const [m, label, title] of [["contains", "abc", "Contains the text"], ["regex", ".*", "Matches a regular expression (RE2)"]]) {
-      const b = el("button", "", label) as HTMLButtonElement;
-      b.dataset.mode = m;
-      b.title = title;
-      b.addEventListener("click", () => setMode(m === "regex"));
-      mode.appendChild(b);
-    }
-    setMode(regex);
-    row.append(mode, q);
+    op.addEventListener("change", placeholder);
+    placeholder();
+    row.append(q);
     box.appendChild(row);
     box.appendChild(err);
     box.append(...missing());
     const go = async () => {
-      // A regular expression keeps its spaces; contains text is trimmed.
+      const [not, base] = parseKey(op.value);
+      const regex = base === "regex";
+      // A regular expression keeps its spaces; other text is trimmed.
       const value = regex ? q.value : q.value.trim();
       if (!value) return setFilter(c.name, null);
-      const f: Filter = { column: c.name, op: regex ? "regex" : "contains", value };
+      const f: Filter = { column: c.name, op: base, value };
+      if (not) f.not = true;
       if (regex) {
         const msg = await check({ ...currentQuery(), filters: [...S.view.filters.filter((x) => x.column !== c.name), f] });
         err.hidden = !msg;
@@ -187,6 +194,40 @@ export function filterForm(c: Column, s?: Stats) {
   }
   box.appendChild(actions);
   return box;
+}
+
+// An operator key is the op, with "!" in front for not.
+type OpKey = string;
+const TEXT_OPS: [OpKey, string][] = [
+  ["equals", "is"], ["!equals", "is not"],
+  ["contains", "contains"], ["!contains", "does not contain"],
+  ["prefix", "starts with"], ["suffix", "ends with"],
+  ["regex", "matches regex"], ["!regex", "does not match regex"],
+];
+const RANGE_OPS: [OpKey, string][] = [["range", "between"], ["!range", "not between"]];
+
+const opKey = (f: Filter): OpKey => (f.not ? "!" : "") + f.op;
+
+function parseKey(k: OpKey): [boolean, Filter["op"]] {
+  return k.startsWith("!") ? [true, k.slice(1) as Filter["op"]] : [false, k as Filter["op"]];
+}
+
+function opSelect(ops: [OpKey, string][], value: OpKey) {
+  const sel = el("select", "ff-op") as HTMLSelectElement;
+  sel.title = "Condition";
+  for (const [k, label] of ops) {
+    const o = el("option", "", label) as HTMLOptionElement;
+    o.value = k;
+    sel.appendChild(o);
+  }
+  sel.value = value;
+  return sel;
+}
+
+function opRow(sel: HTMLSelectElement) {
+  const r = el("div", "ffrow ffop");
+  r.appendChild(sel);
+  return r;
 }
 
 // columnActions list the column's values in the side panel, or hide the
