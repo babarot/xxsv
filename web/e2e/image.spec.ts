@@ -84,7 +84,7 @@ test("shows a small image in the cell, and a larger one on hover", async ({ page
   await expect(cell(page, 0, 1)).toHaveAttribute("title", "img/a.png");
   await expect(cell(page, 1, 1)).toHaveText("nope.png");
   expect(await cell(page, 0, 1).evaluate((e) => (e as HTMLElement).offsetHeight)).toBe(26);
-  // The Images setting turns them off: no small image, the whole path.
+  // The Image paths setting turns them off: no small image, the whole path.
   await page.locator("#settings-btn").click();
   await page.locator('#images-choice [data-images="off"]').click();
   await expect(cell(page, 0, 1).locator(".thumb")).toHaveCount(0);

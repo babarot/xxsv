@@ -49,7 +49,7 @@ export interface State {
   fullValue: { key: string; value: string } | null; // full text of a cut cell
   histScale: "linear" | "log";
   numGroup: boolean; // put commas in integers in the table (the Digit grouping setting)
-  images: boolean; // show the images that cells name, by file name (the Images setting)
+  images: boolean; // show the images that cells name, by file name (the Image paths setting)
   flash: Flash;
 }
 
