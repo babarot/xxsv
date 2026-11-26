@@ -49,6 +49,7 @@ export interface State {
   fullValue: { key: string; value: string } | null; // full text of a cut cell
   histScale: "linear" | "log";
   numGroup: boolean; // put commas in integers in the table (the Digit grouping setting)
+  images: boolean; // show the images that cells name, by file name (the Images setting)
   flash: Flash;
 }
 
@@ -68,7 +69,7 @@ export function newState(view: ViewState = emptyView()): State {
     rownumW: 52, view, total: 0, epoch: 0,
     cur: { r: 0, c: 0 }, anchor: { r: 0, c: 0 },
     expanded: false, panel: null, valuesCol: null, colPop: null, fullValue: null,
-    histScale: "linear", numGroup: true, flash: { at: null, pending: false, seen: false },
+    histScale: "linear", numGroup: true, images: true, flash: { at: null, pending: false, seen: false },
   };
 }
 
@@ -170,7 +171,7 @@ export function applyStats(s: State, generation: number, stats: Stats[]): boolea
 // reports whether the widths were set.
 export function fitWidths(s: State, rows: string[][]): boolean {
   if (!s.widthsPending || !s.meta) return false;
-  s.cols.forEach((c, i) => s.widthOf.set(c.name, estimateWidth(c, rows.map((r) => r[i] ?? ""))));
+  s.cols.forEach((c, i) => s.widthOf.set(c.name, estimateWidth(c, rows.map((r) => r[i] ?? ""), s.images)));
   s.widthsPending = false;
   project(s);
   return true;

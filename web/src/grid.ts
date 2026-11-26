@@ -110,7 +110,7 @@ export function render() {
       cell.dataset.c = String(c);
       if (v === "") cell.classList.add("null");
       if (block.cut.has(`${r},${c}`)) cell.classList.add("cut");
-      const small = thumb({ value: v, type: t, gen: S.meta!.generation, rowId: block.rowIds[r], fileCol: S.fileIdx[c] }, cols[c].name, scheduleRender);
+      const small = S.images && thumb({ value: v, type: t, gen: S.meta!.generation, rowId: block.rowIds[r], fileCol: S.fileIdx[c] }, cols[c].name, scheduleRender);
       if (small) {
         if (showsImages(cols[c].name) && imageKind(v, t) === "path") {
           cell.textContent = imageName(v);

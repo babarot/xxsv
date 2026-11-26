@@ -25,7 +25,7 @@ import { wireDrag } from "./drag.ts";
 import { wireThumbs } from "./thumbs.ts";
 import { grid, hasMore, render, scheduleRender } from "./grid.ts";
 import { renderHeader } from "./header.ts";
-import { histScale, numGroup, toggleSettings, wireChoices } from "./settings.ts";
+import { cellImages, histScale, numGroup, toggleSettings, wireChoices } from "./settings.ts";
 import { connect } from "./live.ts";
 import { showError } from "./status.ts";
 
@@ -41,6 +41,7 @@ function setup() {
   hydrateIcons();
   S.histScale = histScale();
   S.numGroup = numGroup();
+  S.images = cellImages();
   wireSearch();
   const search = $<HTMLInputElement>("search");
 

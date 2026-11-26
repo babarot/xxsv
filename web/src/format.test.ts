@@ -141,4 +141,6 @@ test("imageName keeps the file name of a path", () => {
 test("estimateWidth fits paths to images by their file names", () => {
   const long = "/mnt/storage/media/videos/thumbnails/a.jpg";
   assert.ok(estimateWidth({ name: "pic", type: "string" }, [long]) < estimateWidth({ name: "pic", type: "string" }, [long.replace(".jpg", ".txt")]));
+  // Without images they are text like any other.
+  assert.equal(estimateWidth({ name: "pic", type: "string" }, [long], false), estimateWidth({ name: "pic", type: "string" }, [long.replace(".jpg", ".txt")]));
 });

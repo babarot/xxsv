@@ -48,6 +48,7 @@ export function store(key: string, value: string, fallback: string) {
 
 export const histScale = () => (stored("xxsv.histScale", "linear") === "log" ? "log" : "linear");
 export const numGroup = () => stored("xxsv.numGroup", "on") !== "off";
+export const cellImages = () => stored("xxsv.images", "on") !== "off";
 
 // A choice is a row of buttons in the settings panel, saved under key.
 // apply puts a choice in effect; current, for choices the page keeps in its
@@ -79,6 +80,11 @@ export const CHOICES: { id: string; attr: string; key: string; fallback: string;
     id: "numgroup-choice", attr: "numgroup", key: "xxsv.numGroup", fallback: "on",
     apply: (v) => { S.numGroup = v !== "off"; render(); },
     current: () => (S.numGroup ? "on" : "off"),
+  },
+  {
+    id: "images-choice", attr: "images", key: "xxsv.images", fallback: "on",
+    apply: (v) => { S.images = v !== "off"; render(); },
+    current: () => (S.images ? "on" : "off"),
   },
 ];
 
