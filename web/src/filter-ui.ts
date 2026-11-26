@@ -277,18 +277,48 @@ export function ruleEditor(f: Filter, commit: () => void, focus = true): HTMLEle
   return box;
 }
 
-// valueList is the list of a column's values to pick for "is" and "is
-// not", most frequent first, with a box that narrows them and adds a value
-// not listed.
+// valueList picks the values of "is" and "is not": the picked ones sit as
+// pills in the search box (× or Backspace removes one, as in Notion), and
+// under it the column's values, most frequent first, narrowed by the box,
+// which also adds a value not listed.
 function valueList(f: Filter, commit: () => void, focus: boolean) {
   const wrap = el("div", "vpick");
-  const q = el("input", "tx") as HTMLInputElement;
-  q.placeholder = "Search or add a value…";
+  const box = el("div", "vbox");
+  const q = el("input") as HTMLInputElement;
   q.spellcheck = false;
+  q.setAttribute("aria-label", "Search or add a value");
+  box.appendChild(q);
+  box.addEventListener("click", (e) => { if (e.target === box) q.focus(); });
   const list = el("div", "vlist");
   const not = !!f.not;
+  // armed: Backspace in the empty box marked the last pill; the next one
+  // removes it.
+  let armed = false;
+  const label = (v: string) => (v === "" ? "(empty)" : v);
+  const set = (values: string[]) => {
+    f.values = values;
+    armed = false;
+    commit();
+    draw();
+  };
   const draw = () => {
     const picked = f.values ?? [];
+    box.querySelectorAll(".vtag").forEach((t) => t.remove());
+    picked.forEach((v, i) => {
+      const tag = el("span", "vtag" + (not ? " strike" : "") + (armed && i === picked.length - 1 ? " armed" : ""));
+      tag.title = label(v);
+      const x = el("button") as HTMLButtonElement;
+      x.title = `Remove ${label(v)}`;
+      x.setAttribute("aria-label", x.title);
+      x.appendChild(icon("x", 11));
+      x.addEventListener("click", () => {
+        set(picked.filter((p) => p !== v));
+        q.focus();
+      });
+      tag.append(el("span", "t", label(v)), x);
+      box.insertBefore(tag, q);
+    });
+    q.placeholder = picked.length ? "" : "Search or add a value…";
     const known = knownValues(f.column);
     const items = [
       ...picked.filter((v) => !known.some((k) => k.value === v)).map((v) => ({ value: v, count: -1 })),
@@ -303,13 +333,9 @@ function valueList(f: Filter, commit: () => void, focus: boolean) {
       const cb = el("input") as HTMLInputElement;
       cb.type = "checkbox";
       cb.checked = on;
-      cb.addEventListener("change", () => {
-        f.values = cb.checked ? [...picked, it.value] : picked.filter((v) => v !== it.value);
-        commit();
-        draw();
-      });
-      row.title = `${it.value === "" ? "(empty)" : it.value}${it.count >= 0 ? ` (${fmt(it.count)})` : ""}`;
-      row.append(cb, el("span", "lv" + (on && not ? " strike" : ""), it.value === "" ? "(empty)" : it.value), el("span", "n", it.count >= 0 ? abbr(it.count) : ""));
+      cb.addEventListener("change", () => set(cb.checked ? [...picked, it.value] : picked.filter((v) => v !== it.value)));
+      row.title = `${label(it.value)}${it.count >= 0 ? ` (${fmt(it.count)})` : ""}`;
+      row.append(cb, el("span", "lv" + (on && not ? " strike" : ""), label(it.value)), el("span", "n", it.count >= 0 ? abbr(it.count) : ""));
       list.appendChild(row);
     }
     const text = q.value.trim();
@@ -317,21 +343,33 @@ function valueList(f: Filter, commit: () => void, focus: boolean) {
       const add = el("button", "vadd") as HTMLButtonElement;
       add.append(icon("plus", 12), el("span", "", `Add “${text}”`));
       add.addEventListener("click", () => {
-        f.values = [...picked, text];
         q.value = "";
-        commit();
-        draw();
+        set([...picked, text]);
       });
       list.appendChild(add);
     }
     if (!list.childElementCount) list.appendChild(el("div", "hint", "No values."));
   };
-  q.addEventListener("input", draw);
+  q.addEventListener("input", () => {
+    armed = false;
+    draw();
+  });
   q.addEventListener("keydown", (e) => {
     if (e.key === "Enter") list.querySelector<HTMLElement>(".vadd, label:not(.on) input")?.click();
+    else if (e.key === "Backspace" && q.value === "" && f.values?.length) {
+      e.preventDefault();
+      if (armed) set(f.values.slice(0, -1));
+      else {
+        armed = true;
+        draw();
+      }
+    } else if (armed) {
+      armed = false;
+      draw();
+    }
   });
   draw();
-  wrap.append(q, list);
+  wrap.append(box, list);
   if (focus) setTimeout(() => q.focus());
   return wrap;
 }

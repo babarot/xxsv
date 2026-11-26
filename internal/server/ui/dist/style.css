@@ -363,6 +363,16 @@ button { font: inherit; color: inherit; }
 .fed input.tx:focus, .fmenu input.tx:focus { box-shadow: 0 0 0 3px var(--focus-ring); }
 .fed .rng { display: flex; gap: 6px; align-items: center; }
 .fed .hint, .fadv .hint, #fadv .hint { font-size: 11px; color: var(--text-faint); padding: 4px 2px; }
+/* The picked values, as pills in the search box. */
+.vbox { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 28px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface-2); cursor: text; }
+.vbox:focus-within { box-shadow: 0 0 0 3px var(--focus-ring); }
+.vbox input { flex: 1; min-width: 70px; height: 20px; border: 0; outline: 0; background: none; color: var(--text); font: 12px var(--sans); padding: 0 2px; }
+.vtag { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; height: 20px; padding: 0 2px 0 7px; border-radius: 4px; background: var(--surface-3); color: var(--text); font-size: 12px; }
+.vtag .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.vtag.strike .t { text-decoration: line-through; color: var(--text-muted); }
+.vtag.armed { box-shadow: 0 0 0 1px var(--accent); }
+.vtag button { width: 16px; height: 16px; flex: none; padding: 0; border: 0; border-radius: 3px; background: none; color: var(--text-muted); display: grid; place-items: center; cursor: pointer; }
+.vtag button:hover { background: var(--border-strong); color: var(--text); }
 .vlist { margin-top: 6px; max-height: 220px; overflow: auto; display: flex; flex-direction: column; }
 .vlist label { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; font-size: 12px; cursor: pointer; }
 .vlist label:hover { background: var(--surface-2); }

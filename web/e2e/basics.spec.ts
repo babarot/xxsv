@@ -130,6 +130,36 @@ test("filters by values picked in the list, and unpicks them", async ({ page, se
   await expect(chips(page)).toHaveClass(/idle/); // waits for a value
 });
 
+test("shows the picked values as pills in the search box, and removes them", async ({ page, serve }) => {
+  const xxsv = await serve("t.csv", "k\na\na\nb\nc\n");
+  await open(page, xxsv.url);
+  await page.locator('[data-prof="0"]').click();
+  const item = (v: string) => page.locator("#colpop .vlist label").filter({ hasText: new RegExp(`^${v}`) });
+  const pills = page.locator("#colpop .vbox .vtag");
+  await item("a").click();
+  await item("b").click();
+  await item("c").click();
+  await expect(pills).toHaveText(["a", "b", "c"]);
+  await expect(page.locator("#counts")).toHaveText("4 of 4 rows · 1 columns");
+  // × removes one; Backspace in the empty box marks the last, then removes it.
+  await page.getByRole("button", { name: "Remove b" }).click();
+  await expect(pills).toHaveText(["a", "c"]);
+  const box = page.locator("#colpop .vbox input");
+  await box.press("Backspace");
+  await expect(pills.last()).toHaveClass(/armed/);
+  await box.press("Backspace");
+  await expect(pills).toHaveText(["a"]);
+  await expect(page.locator("#counts")).toHaveText("2 of 4 rows · 1 columns");
+  // Typing a value not listed adds it.
+  await box.fill("zz");
+  await box.press("Enter");
+  await expect(pills).toHaveText(["a", "zz"]);
+  // "is not" strikes the pills through.
+  await pickOp(page, "#colpop", "is not");
+  await expect(page.locator("#colpop .vbox .vtag.strike")).toHaveCount(2);
+  await expect(page.locator("#counts")).toHaveText("2 of 4 rows · 1 columns");
+});
+
 test("negates a filter and switches its condition from the menu", async ({ page, serve }) => {
   const xxsv = await serve("t.csv", "k,v\na,1\na,2\nb,3\nab,4\n,5\n");
   await open(page, xxsv.url);
