@@ -30,6 +30,10 @@ let fetches = 0;
 const withImages = new Set<string>();
 let timer = 0;
 
+// showsImages says whether a column was seen to name images, so that its
+// cells show file names in place of whole paths.
+export const showsImages = (column: string) => withImages.has(column);
+
 // thumb makes the box of a cell's small image, or null for a value that
 // names none. redraw runs when a column turns out to have images.
 export function thumb(c: ImageCell, column: string, redraw: () => void): HTMLElement | null {

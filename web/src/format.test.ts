@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { abbr, binLabel, changeSummary, colLetter, edgeLabel, estimateWidth, filterText, filtersText, groupDigits, imageKind, pretty, viewSentence } from "./format.ts";
+import { abbr, binLabel, changeSummary, colLetter, edgeLabel, estimateWidth, filterText, filtersText, groupDigits, imageKind, imageName, pretty, viewSentence } from "./format.ts";
 import type { Changes, Meta, Stats } from "./types.ts";
 
 test("groupDigits groups integers in their text, exact past 2^53", () => {
@@ -130,4 +130,17 @@ test("imageKind leaves URLs, other text and other types alone", () => {
   }
   assert.equal(imageKind("a.png", "integer"), null); // an invalid cell
   assert.equal(imageKind('["a.png"]', "json"), null);
+});
+
+test("imageName keeps the file name of a path", () => {
+  assert.equal(imageName("/Volumes/a/b/c.jpg"), "c.jpg");
+  assert.equal(imageName("C:\\img\\a.gif"), "a.gif");
+  assert.equal(imageName(" a.png "), "a.png");
+});
+
+test("estimateWidth fits paths to images by their file names", () => {
+  const long = "/mnt/storage/media/videos/thumbnails/a.jpg";
+  assert.ok(estimateWidth({ name: "pic", type: "string" }, [long]) < estimateWidth({ name: "pic", type: "string" }, [long.replace(".jpg", ".txt")]));
+  // Without images they are text like any other.
+  assert.equal(estimateWidth({ name: "pic", type: "string" }, [long], false), estimateWidth({ name: "pic", type: "string" }, [long.replace(".jpg", ".txt")]));
 });

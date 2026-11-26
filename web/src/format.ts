@@ -163,17 +163,26 @@ export function imageKind(value: string, type: ColType): "data" | "path" | null 
   return PATH.test(value) && !URL_LIKE.test(value) ? "path" : null;
 }
 
+// imageName is what a cell shows for a path to an image: the file name
+// alone, since the folders before it are mostly the same in every row and
+// are cut off anyway. The full path is in the cell panel and the peek.
+export function imageName(value: string): string {
+  const v = value.trim();
+  return v.slice(Math.max(v.lastIndexOf("/"), v.lastIndexOf("\\")) + 1);
+}
+
 // estimateWidth picks a column's width in pixels from its name, type and a
-// sample of its values (the first rows shown), between 90 and 340.
-export function estimateWidth(c: Column, values: string[] = []): number {
+// sample of its values (the first rows shown), between 90 and 340. With
+// images, paths to images take a small image and their file names.
+export function estimateWidth(c: Column, values: string[] = [], images = true): number {
   let chars = c.name.length + TYPE_ABBR[c.type].length + 5;
-  const longest = Math.max(0, ...values.map((v) => v.length));
+  const longest = Math.max(0, ...values.map((v) => (images && imageKind(v, c.type) === "path" ? imageName(v) : v).length));
   if (isNum(c.type)) chars = Math.max(chars, longest + 3, 8);
   else if (c.type === "date") chars = Math.max(chars, 11);
   else if (c.type === "datetime") chars = Math.max(chars, Math.min(longest + 1, 34), 18);
   else if (c.type === "boolean") chars = Math.max(chars, 6);
   else if (c.type === "json") chars = Math.max(chars, 12);
-  else chars = Math.max(chars, Math.min(longest, 34) + (values.some((v) => imageKind(v, c.type)) ? THUMB_CHARS : 0), 12);
+  else chars = Math.max(chars, Math.min(longest, 34) + (images && values.some((v) => imageKind(v, c.type)) ? THUMB_CHARS : 0), 12);
   return Math.max(90, Math.min(340, chars * 7.2 + 22));
 }
 
