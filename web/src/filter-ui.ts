@@ -32,10 +32,24 @@ export function uiKey(f: Filter): OpKey {
   return k && f.op === "range" && (k.replace("!", "") === "eq" || k === "ge" || k === "le" || k.replace("!", "") === "range") ? k : opKey(f);
 }
 
-// setOp changes a rule's condition in place.
-function setOp(f: Filter, k: OpKey) {
+// badRegex keeps text that failed the check when a rule became a regular
+// expression: the rule waits without it, and its box shows it with the error.
+const badRegex = new WeakMap<Filter, { text: string; msg: string }>();
+
+// setOp changes a rule's condition in place, then runs after. Text carried
+// over to a regular expression is checked first.
+async function setOp(f: Filter, k: OpKey, after: () => void) {
   assign(f, withOp(f, k, knownValues(f.column).map((v) => v.value)));
   chosen.set(f, k);
+  badRegex.delete(f);
+  if (f.op === "regex" && f.value) {
+    const msg = await check({ filters: [f] });
+    if (msg) {
+      badRegex.set(f, { text: f.value, msg: msg.replace(/^filter on "[^"]*": /, "") });
+      delete f.value;
+    }
+  }
+  after();
 }
 
 // assign changes a rule in place to next, so that the views holding it
@@ -66,7 +80,7 @@ export const isMenuAnchor = (n: EventTarget) => n === menuAnchor;
 // showMenu opens the pop-up menu under an anchor; search adds a box that
 // narrows the items. onClose runs when it closes, however it closes.
 export function showMenu(anchor: Element, items: MenuItem[], opts: { search?: string; onClose?: () => void } = {}) {
-  closeMenu();
+  const prev = dropMenu();
   const m = $("fmenu");
   m.replaceChildren();
   m.style.width = "";
@@ -98,17 +112,28 @@ export function showMenu(anchor: Element, items: MenuItem[], opts: { search?: st
   menuClosed = opts.onClose ?? null;
   menuAnchor = anchor;
   place(m, anchor, 4);
+  prev?.(); // after placing: it may draw the anchor's panel again
 }
 
 // showPanel opens the menu's pop-up with any content (a list of values).
 function showPanel(anchor: Element, content: HTMLElement, width: number, onClose?: () => void) {
-  closeMenu();
+  const prev = dropMenu();
   const m = $("fmenu");
   m.replaceChildren(content);
   m.style.width = width + "px";
   menuClosed = onClose ?? null;
   menuAnchor = anchor;
   place(m, anchor, 4);
+  prev?.();
+}
+
+// dropMenu hides the menu and hands back what was to run on its closing.
+function dropMenu() {
+  const m = $("fmenu");
+  const f = m.hidden ? null : menuClosed;
+  m.hidden = true;
+  menuClosed = null;
+  return f;
 }
 
 export function closeMenu() {
@@ -140,8 +165,7 @@ export function opButton(f: Filter, changed: () => void) {
       label, on: k === key,
       run: () => {
         if (k === key) return;
-        setOp(f, k);
-        changed();
+        void setOp(f, k, changed);
       },
     })));
   });
@@ -225,9 +249,11 @@ export function ruleEditor(f: Filter, commit: () => void, focus = true): HTMLEle
     return box;
   }
   const regex = k === "regex";
-  const i = field(f.value ?? "", regex ? "regex (RE2)…" : k === "prefix" ? "starts with…" : k === "suffix" ? "ends with…" : "contains…");
+  const bad = regex ? badRegex.get(f) : undefined;
+  const i = field(bad?.text ?? f.value ?? "", regex ? "regex (RE2)…" : k === "prefix" ? "starts with…" : k === "suffix" ? "ends with…" : "contains…");
   const err = el("div", "ff-err");
-  err.hidden = true;
+  err.hidden = !bad;
+  err.textContent = bad?.msg ?? "";
   typed(i, async () => {
     // A regular expression keeps its spaces; other text is trimmed.
     const v = regex ? i.value : i.value.trim();
@@ -242,6 +268,7 @@ export function ruleEditor(f: Filter, commit: () => void, focus = true): HTMLEle
       if (msg) return;
     }
     err.hidden = true;
+    badRegex.delete(f);
     if (v) f.value = v; else delete f.value;
     commit();
   });
@@ -469,11 +496,8 @@ function ruleRow(root: Root, f: Filter, i: number, structure: () => void, top: b
     ops.appendChild(o);
   }
   ops.value = uiKey(f);
-  ops.addEventListener("change", () => {
-    setOp(f, ops.value as OpKey);
-    structure();
-  });
-  row.append(cols, ops, inlineValue(f, structure));
+  ops.addEventListener("change", () => void setOp(f, ops.value as OpKey, structure));
+  row.append(cols, ops, inlineValue(f));
   const more = el("button", "btn-icon") as HTMLButtonElement;
   more.title = "More";
   more.appendChild(icon("ellipsis", 14));
@@ -493,14 +517,16 @@ function removeFrom(root: Root, n: FilterNode) {
 
 // inlineValue is a rule's value in its row: the picked values, which open
 // the list, or the boxes of the editor.
-function inlineValue(f: Filter, structure: () => void): HTMLElement {
+function inlineValue(f: Filter): HTMLElement {
   const k = uiKey(f).replace("!", "");
   if (k !== "in") return ruleEditor(f, () => filtersChanged(), false);
   const tok = el("button", "tok") as HTMLButtonElement;
   const vs = f.values ?? [];
   if (vs.length) for (const v of vs) tok.appendChild(el("span", "t" + (f.not ? " strike" : ""), v === "" ? "(empty)" : v));
   else tok.appendChild(el("span", "ph", "Select…"));
-  tok.addEventListener("click", () => showPanel(tok, ruleEditor(f, () => filtersChanged()), 260, structure));
+  // The list changes the rule in place; closing it only draws the panel
+  // again (writing the root back would undo changes made meanwhile).
+  tok.addEventListener("click", () => showPanel(tok, ruleEditor(f, () => filtersChanged()), 260, () => { if (advanced) drawAdvanced(); }));
   return tok;
 }
 

@@ -201,6 +201,18 @@ test("joins rules with or and groups them in the advanced filter", async ({ page
   await expect(page.locator("#colpop .inadv")).toContainText("advanced filter");
 });
 
+test("clears the filters while a value list of the advanced filter is open", async ({ page, serve }) => {
+  const xxsv = await serve("t.csv", "k,v\na,1\nb,2\n");
+  const view = { filters: [{ or: [{ column: "k", op: "in", values: ["a"] }, { column: "v", op: "range", min: "2" }] }] };
+  await open(page, xxsv.url + "#" + encodeURIComponent(JSON.stringify(view)));
+  await page.locator("#chips .fchip.bundle").click();
+  await page.locator("#fadv .tok").click();
+  await expect(page.locator("#fmenu .vlist")).toBeVisible();
+  await page.locator("#chips .chip-clear").click();
+  await expect(page.locator("#chips")).toBeHidden();
+  await expect(page.locator("#counts")).toHaveText("2 rows · 2 columns");
+});
+
 test("restores the view from the URL hash", async ({ page, serve }) => {
   const xxsv = await serve("t.csv", csv(100));
   const view = { search: "item1", filters: [{ column: "qty", op: "range", min: "50" }], sort: { column: "qty", desc: true }, top: 0 };

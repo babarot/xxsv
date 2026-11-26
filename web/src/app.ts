@@ -48,14 +48,19 @@ export async function doRefresh() {
     const stats = api<{ generation: number; stats: Stats[] }>("/api/stats");
     stats.catch(() => {}); // awaited below; not unhandled while the meta loads
     const m = await api<Meta>("/api/meta");
-    applyMeta(S, m);
+    const { columnsChanged } = applyMeta(S, m);
+    // applyMeta drops rules on columns that are gone; the rows start over
+    // below, so the remembered query follows the filters as they are now.
+    lastFilters = JSON.stringify(liveFilters(S.view.filters));
     // The distribution popover closes when its column is gone (applyMeta
     // clears it when the columns changed).
     renderColPop();
     renderTop();
     renderStatus();
     renderChips();
-    redrawFilterUi();
+    // An open editor is drawn again only when columns changed: a reload of
+    // the same columns must not drop what is being typed.
+    if (columnsChanged) redrawFilterUi();
     renderColumnsMenu();
     restartRows();
     if (!$("settings").hidden) renderAbout();
@@ -185,7 +190,7 @@ export function setFilter(column: string, f: Filter | null) {
 // (keepColPop), so a box being typed in keeps the keyboard.
 // A change that leaves the query the same (a rule still waiting for its
 // value) keeps the rows and the scroll position.
-let lastFilters = "";
+let lastFilters = JSON.stringify(liveFilters(S.view.filters));
 export function filtersChanged(keepColPop = false) {
   renderChips();
   const now = JSON.stringify(liveFilters(S.view.filters));
