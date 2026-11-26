@@ -38,7 +38,8 @@ type ValueItem struct {
 // leaving out its filters on that column (its sort and columns do not
 // matter), those containing Search (ASCII letters ignoring case, as the
 // table's search), from Offset. Leaving out the column's own filters lists
-// the values a filter on it can switch to, as a spreadsheet's filter does.
+// the values a filter on it can switch to, as a spreadsheet's filter does;
+// only filters directly in Query.Filters are left out, not those in groups.
 type ValuesQuery struct {
 	Query  Query  `json:"query"`
 	Column string `json:"column"`
@@ -80,7 +81,7 @@ func (e *Engine) Values(vq ValuesQuery) (*Values, error) {
 	}
 	q := Query{Search: vq.Query.Search, Regex: vq.Query.Regex}
 	for _, f := range vq.Query.Filters {
-		if f.Column != vq.Column {
+		if f.isGroup() || f.Column != vq.Column {
 			q.Filters = append(q.Filters, f)
 		}
 	}

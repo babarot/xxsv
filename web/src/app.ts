@@ -6,11 +6,13 @@ import { readHash, writeHash } from "./hash.ts";
 import { Rows, blockOf } from "./rows.ts";
 import { moved, range } from "./selection.ts";
 import { applyMeta, applyStats, fitWidths, newQuery, newState, nextSorts, rowsShown, setColumns } from "./state.ts";
+import { liveFilters, replaceColumn, topRules } from "./filters.ts";
 import type { Filter, Meta, Pos, RowsResponse, Stats } from "./types.ts";
 import { cancelAggregate, requestAggregate } from "./aggregate.ts";
 import { api, post } from "./api.ts";
 import { renderPinPanel, renderSelectionInfo } from "./cell-popover.ts";
 import { renderChips } from "./chips.ts";
+import { redrawFilterUi } from "./filter-ui.ts";
 import { renderColumnsMenu } from "./columns-menu.ts";
 import { restartValues } from "./values-panel.ts";
 import { renderColPop } from "./col-popover.ts";
@@ -53,6 +55,7 @@ export async function doRefresh() {
     renderTop();
     renderStatus();
     renderChips();
+    redrawFilterUi();
     renderColumnsMenu();
     restartRows();
     if (!$("settings").hidden) renderAbout();
@@ -78,8 +81,10 @@ export function cycleSort(column: string, add: boolean) {
   resetRows();
 }
 
+// currentQuery is the query of the view; rules still waiting for a value
+// are left out.
 export function currentQuery() {
-  return { search: S.view.search, regex: S.view.regex || undefined, filters: S.view.filters, sorts: S.view.sorts, columns: S.view.columns ?? undefined };
+  return { search: S.view.search, regex: S.view.regex || undefined, filters: liveFilters(S.view.filters), sorts: S.view.sorts, columns: S.view.columns ?? undefined };
 }
 
 // showColumns shows the named columns in that order (null: every column),
@@ -168,13 +173,28 @@ export function toggleColPop(ci: number) {
   renderColPop();
 }
 
+// setFilter replaces the rules directly on a column with f (none for null);
+// rules on it inside groups stay.
 export function setFilter(column: string, f: Filter | null) {
-  S.view.filters = S.view.filters.filter((x) => x.column !== column);
-  if (f) S.view.filters.push(f);
-  S.view.top = 0;
+  S.view.filters = replaceColumn(S.view.filters, column, f);
+  filtersChanged();
+}
+
+// filtersChanged starts the rows over after view.filters changed. The
+// distribution popover is drawn again unless it made the change itself
+// (keepColPop), so a box being typed in keeps the keyboard.
+// A change that leaves the query the same (a rule still waiting for its
+// value) keeps the rows and the scroll position.
+let lastFilters = "";
+export function filtersChanged(keepColPop = false) {
   renderChips();
-  resetRows();
-  if (S.colPop !== null) renderColPop();
+  const now = JSON.stringify(liveFilters(S.view.filters));
+  if (now !== lastFilters) {
+    lastFilters = now;
+    S.view.top = 0;
+    resetRows();
+  } else writeHash(S.view);
+  if (S.colPop !== null && !keepColPop) renderColPop();
 }
 
 export function moveBy(dr: number, dc: number, extend: boolean) {
@@ -187,6 +207,6 @@ export function moveBy(dr: number, dc: number, extend: boolean) {
 // toggleMissing filters a column to its missing cells, or removes that
 // filter when it is on.
 export function toggleMissing(column: string) {
-  const on = S.view.filters.some((f) => f.column === column && f.op === "null");
+  const on = topRules(S.view.filters, column).some((f) => f.op === "null");
   setFilter(column, on ? null : { column, op: "null" });
 }

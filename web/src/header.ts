@@ -1,5 +1,6 @@
 // The table header: column letters, names with sort and filter marks, and the distribution row.
 import { NULL_MARK, TYPE_ABBR } from "./constants.ts";
+import { filtered } from "./filters.ts";
 import { abbr, colLetter, isNum } from "./format.ts";
 import { icon } from "./icons.ts";
 import { S, selRange } from "./app.ts";
@@ -45,7 +46,7 @@ export function renderHeader() {
       if (S.view.sorts.length > 1) a.appendChild(el("span", "prio", String(k + 1)));
       nm.appendChild(a);
     }
-    if (S.view.filters.some((f) => f.column === c.name)) {
+    if (filtered(S.view.filters, c.name)) {
       const f = el("span", "fmark");
       f.appendChild(icon("filter", 11));
       nm.appendChild(f);

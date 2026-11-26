@@ -1,4 +1,4 @@
-import { test, expect, open, cell, column, csv, saveAndWait, generation } from "./fixtures";
+import { test, expect, open, cell, column, csv, saveAndWait, generation, chips, pickOp } from "./fixtures";
 
 test("keeps the sort, filters, search and scroll position across a reload, and resets the selection", async ({ page, serve }) => {
   // The search and the filter both narrow the rows, so losing either one
@@ -18,7 +18,7 @@ test("keeps the sort, filters, search and scroll position across a reload, and r
   expect(matching(after)).toBe(n + 1);
   await expect(page.locator("#counts")).toHaveText(`${(n + 1).toLocaleString("en-US")} of 3,001 rows · 5 columns`);
   await expect(page.locator("#search")).toHaveValue("item1");
-  await expect(page.locator("#chips .chip")).toHaveCount(1);
+  await expect(chips(page)).toHaveCount(1);
   await expect.poll(() => page.locator("#rows .rh").first().getAttribute("data-row")).toBe("100");
   const qty: number[] = [];
   for (let r = 100; r < 115; r++) qty.push(Number(await cell(page, r, 2).textContent()));
@@ -49,9 +49,10 @@ test("drops filters and the sort on columns that are gone", async ({ page, serve
   await page.locator('[data-sort="b"]').click(); // descending: y first
   await expect(cell(page, 0, 1)).toHaveText("y");
   await page.locator('[data-prof="1"]').click();
+  await pickOp(page, "#colpop", "contains");
   await page.locator('#colpop input[placeholder="contains…"]').fill("x");
   await page.locator('#colpop input[placeholder="contains…"]').press("Enter");
-  await expect(page.locator("#chips .chip")).toHaveCount(1);
+  await expect(chips(page)).toHaveCount(1);
   await page.keyboard.press("Escape");
   await saveAndWait(page, xxsv, "a,c\n2,x\n1,y\n");
   await expect(page.locator('[data-sort="c"]')).toBeVisible();

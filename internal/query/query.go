@@ -27,8 +27,10 @@ type Query struct {
 	// match regardless of case; other characters must match exactly. With
 	// Regex, Search is a regular expression (RE2, case-sensitive unless it
 	// starts with (?i)) that any cell must match.
-	Search  string   `json:"search,omitempty"`
-	Regex   bool     `json:"regex,omitempty"`
+	Search string `json:"search,omitempty"`
+	Regex  bool   `json:"regex,omitempty"`
+	// Filters keeps the rows every filter keeps; a group in it combines
+	// filters with "or".
 	Filters []Filter `json:"filters,omitempty"`
 	// Sorts are the sort keys, compared in order; at most MaxSortKeys.
 	Sorts []Sort `json:"sorts,omitempty"`
@@ -48,19 +50,34 @@ type Query struct {
 // the rows whose cell does not. Not keeps missing and invalid cells too
 // ("is not x" keeps an empty cell, like Notion), except where Op already
 // names them.
+//
+// A filter with And or Or instead of a Column is a group: it keeps the rows
+// all of And keep, or those any of Or keeps. Groups nest up to
+// MaxFilterDepth deep; a group with no filters keeps every row.
 type Filter struct {
-	Column string `json:"column"`
-	Op     Op     `json:"op"`
+	Column string `json:"column,omitempty"`
+	Op     Op     `json:"op,omitempty"`
 	Not    bool   `json:"not,omitempty"`
 	// Value is the text for OpContains, OpPrefix, OpSuffix, OpEquals and
 	// OpRegex.
 	Value string `json:"value,omitempty"`
+	// Values are the texts for OpIn.
+	Values []string `json:"values,omitempty"`
 	// Min and Max bound OpRange, inclusive; either may be empty. They are
 	// read as the column's type: an integer, a number, or a date or
 	// datetime (a date is accepted for a datetime column).
 	Min string `json:"min,omitempty"`
 	Max string `json:"max,omitempty"`
+
+	And []Filter `json:"and,omitempty"`
+	Or  []Filter `json:"or,omitempty"`
 }
+
+// MaxFilterDepth is how deep groups nest: a group in Query.Filters is at
+// depth 1.
+const MaxFilterDepth = 3
+
+func (f Filter) isGroup() bool { return f.And != nil || f.Or != nil }
 
 // Op is a filter operation.
 type Op string
@@ -74,7 +91,9 @@ const (
 	// OpEquals: the raw text equals Value. Boolean values ignore case and
 	// surrounding spaces; invalid text in a boolean column must equal Value
 	// exactly, like any other text.
-	OpEquals  Op = "equals"
+	OpEquals Op = "equals"
+	// OpIn: the raw text equals one of Values, each matched as OpEquals.
+	OpIn      Op = "in"
 	OpRegex   Op = "regex"   // any column: the raw text matches Value, a regular expression (RE2)
 	OpRange   Op = "range"   // integer, number, date and datetime columns
 	OpNull    Op = "null"    // the cell is missing
@@ -492,11 +511,63 @@ func (e *Engine) filter(preds []func(int) bool) []int32 {
 }
 
 func (e *Engine) compile(f Filter) (func(int) bool, error) {
-	p, err := e.compileOp(f)
+	return e.compileAt(f, 1)
+}
+
+func (e *Engine) compileAt(f Filter, depth int) (func(int) bool, error) {
+	var p func(int) bool
+	var err error
+	if f.isGroup() {
+		p, err = e.compileGroup(f, depth)
+	} else {
+		p, err = e.compileOp(f)
+	}
 	if err != nil || !f.Not {
 		return p, err
 	}
 	return func(r int) bool { return !p(r) }, nil
+}
+
+func (e *Engine) compileGroup(f Filter, depth int) (func(int) bool, error) {
+	if depth > MaxFilterDepth {
+		return nil, badQuery("filter groups nest more than %d deep", MaxFilterDepth)
+	}
+	if f.Column != "" || f.Op != "" || (f.And != nil && f.Or != nil) {
+		return nil, badQuery("a filter group has either and or or, and no column or op")
+	}
+	subs, any := f.And, false
+	if f.Or != nil {
+		subs, any = f.Or, true
+	}
+	preds := make([]func(int) bool, 0, len(subs))
+	for _, s := range subs {
+		p, err := e.compileAt(s, depth+1)
+		if err != nil {
+			return nil, err
+		}
+		preds = append(preds, p)
+	}
+	if len(preds) == 0 {
+		return func(int) bool { return true }, nil
+	}
+	if any {
+		return func(r int) bool {
+			for _, p := range preds {
+				if p(r) {
+					return true
+				}
+			}
+			return false
+		}, nil
+	}
+	return func(r int) bool {
+		for _, p := range preds {
+			if !p(r) {
+				return false
+			}
+		}
+		return true
+	}, nil
 }
 
 func (e *Engine) compileOp(f Filter) (func(int) bool, error) {
@@ -534,20 +605,36 @@ func (e *Engine) compileOp(f Filter) (func(int) bool, error) {
 			return len(s) >= len(needle) && equalFold(s[len(s)-len(needle):], needle)
 		}, nil
 	case OpEquals:
-		if c.Type == table.Boolean {
-			want := strings.TrimSpace(f.Value)
-			return func(r int) bool {
-				if c.HasValue(r) {
-					return strings.EqualFold(strings.TrimSpace(c.Raw[r]), want)
-				}
-				return c.IsInvalid(r) && c.Raw[r] == f.Value
-			}, nil
-		}
-		return func(r int) bool { return c.Raw[r] == f.Value }, nil
+		return equalsAny(c, []string{f.Value}), nil
+	case OpIn:
+		return equalsAny(c, f.Values), nil
 	case OpRange:
 		return compileRange(c, f)
 	}
 	return nil, badQuery("unknown filter op %q", f.Op)
+}
+
+// equalsAny matches the cells whose raw text equals one of values. Boolean
+// values ignore case and surrounding spaces; invalid text in a boolean
+// column must equal a value exactly, like any other text.
+func equalsAny(c *table.Column, values []string) func(int) bool {
+	exact := make(map[string]bool, len(values))
+	for _, v := range values {
+		exact[v] = true
+	}
+	if c.Type != table.Boolean {
+		return func(r int) bool { return exact[c.Raw[r]] }
+	}
+	folded := make(map[string]bool, len(values))
+	for _, v := range values {
+		folded[strings.ToLower(strings.TrimSpace(v))] = true
+	}
+	return func(r int) bool {
+		if c.HasValue(r) {
+			return folded[strings.ToLower(strings.TrimSpace(c.Raw[r]))]
+		}
+		return c.IsInvalid(r) && exact[c.Raw[r]]
+	}
 }
 
 func compileRange(c *table.Column, f Filter) (func(int) bool, error) {

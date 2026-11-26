@@ -33,8 +33,14 @@ export interface Stats {
   top?: { value: string; count: number }[];
 }
 
-// not keeps the rows the op does not (missing and invalid cells too).
-export interface Filter { column: string; op: "contains" | "prefix" | "suffix" | "regex" | "equals" | "range" | "null" | "notnull" | "invalid"; not?: boolean; value?: string; min?: string; max?: string }
+// A Filter is one rule on a column (the server's query.Filter without and
+// and or); not keeps the rows the op does not (missing and invalid cells
+// too). values are the texts of "in"; "equals" is read from older views.
+export type FilterOp = "contains" | "prefix" | "suffix" | "regex" | "equals" | "in" | "range" | "null" | "notnull" | "invalid";
+export interface Filter { column: string; op: FilterOp; not?: boolean; value?: string; values?: string[]; min?: string; max?: string }
+// A Group keeps the rows all of and keep, or those any of or keeps.
+export interface Group { and?: FilterNode[]; or?: FilterNode[]; not?: boolean }
+export type FilterNode = Filter | Group;
 export interface Sort { column: string; desc?: boolean }
 
 export interface RowsResponse {
@@ -49,7 +55,7 @@ export interface Aggregate { generation: number; count: number; numericCount: nu
 // search as a regular expression. sorts are the sort
 // keys, compared in order; columns are the columns shown and their order by
 // name, or null for every column in file order.
-export interface ViewState { search: string; regex: boolean; filters: Filter[]; sorts: Sort[]; columns: string[] | null; top: number }
+export interface ViewState { search: string; regex: boolean; filters: FilterNode[]; sorts: Sort[]; columns: string[] | null; top: number }
 
 // Pos is a display position: a row in the filtered, sorted order, and a column.
 export interface Pos { r: number; c: number }

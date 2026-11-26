@@ -7,6 +7,7 @@
 // stands for change: a new query (search, filters, sort) or a new load of
 // the file. What each change keeps and drops is decided here, in newQuery
 // and applyMeta, and nowhere else.
+import { dropColumns } from "./filters.ts";
 import { estimateWidth, rownumWidth } from "./format.ts";
 import { emptyView } from "./hash.ts";
 import { first } from "./selection.ts";
@@ -100,7 +101,7 @@ export function applyMeta(s: State, m: Meta): { columnsChanged: boolean } {
   const before = s.meta ? new Set(s.meta.columns.map((c) => c.name)) : null;
   s.meta = m;
   const names = new Set(m.columns.map((c) => c.name));
-  s.view.filters = s.view.filters.filter((f) => names.has(f.column));
+  s.view.filters = dropColumns(s.view.filters, names);
   s.view.sorts = s.view.sorts.filter((k) => names.has(k.column));
   if (s.view.columns) {
     const added = before ? m.columns.map((c) => c.name).filter((n) => !before.has(n)) : [];

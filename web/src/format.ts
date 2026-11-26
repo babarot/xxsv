@@ -1,7 +1,8 @@
 // Text for the page: numbers, column letters, labels and sentences. Nothing
 // here touches the DOM.
 import { TYPE_ABBR } from "./constants.ts";
-import type { Changes, Column, ColType, Filter, Hist, Meta, Stats, ViewState } from "./types.ts";
+import { groupConj, groupItems, isGroup, liveFilters, opKey, rootOf } from "./filters.ts";
+import type { Changes, Column, ColType, Filter, FilterNode, Hist, Meta, Stats, ViewState } from "./types.ts";
 
 export const isNum = (t: ColType) => t === "integer" || t === "number";
 export const isRange = (t: ColType) => isNum(t) || t === "date" || t === "datetime";
@@ -73,22 +74,48 @@ export function binLabel(s: Stats, h: Hist, i: number) {
 export const invalidText = (t: ColType | undefined) =>
   isNum(t ?? "string") ? "not a number" : t === "date" || t === "datetime" ? "not a date" : t === "boolean" ? "not true/false" : "invalid";
 
-// filterText describes a filter as [column, condition]; type is the
+// filterText describes a rule as [column, condition]; type is the
 // column's, for naming invalid cells.
 export function filterText(f: Filter, type?: ColType): [string, string] {
   const v = `“${f.value ?? ""}”`;
   const not = !!f.not;
   switch (f.op) {
     case "invalid": return [f.column, not ? "is valid" : `is ${invalidText(type)}`];
-    case "range": return [f.column, `${not ? "not " : ""}${f.min ?? "…"} – ${f.max ?? "…"}`];
+    case "range": {
+      const lo = f.min || "…", hi = f.max || "…";
+      switch (opKey(f)) {
+        case "eq": return [f.column, `= ${lo}`];
+        case "!eq": return [f.column, `≠ ${lo}`];
+        case "ge": return [f.column, `≥ ${lo}`];
+        case "le": return [f.column, `≤ ${hi}`];
+        default: return [f.column, `${not ? "not between" : "between"} ${lo} – ${hi}`];
+      }
+    }
     case "null": return [f.column, not ? "is not missing" : "is missing"];
     case "notnull": return [f.column, not ? "is missing" : "is not missing"];
-    case "equals": return [f.column, `${not ? "is not" : "is"} ${v}`];
+    case "equals": case "in": {
+      const vs = f.op === "in" ? f.values ?? [] : [f.value ?? ""];
+      return [f.column, `${not ? "is not" : "is"} ${vs.length ? vs.map((x) => `“${x}”`).join(", ") : "…"}`];
+    }
     case "regex": return [f.column, `${not ? "does not match" : "matches"} /${f.value ?? ""}/`];
     case "prefix": return [f.column, `${not ? "does not start" : "starts"} with ${v}`];
     case "suffix": return [f.column, `${not ? "does not end" : "ends"} with ${v}`];
     default: return [f.column, `${not ? "does not contain" : "contains"} ${v}`];
   }
+}
+
+// filtersText writes the filters as one condition, "a and (b or c)", with
+// the rules the query uses (incomplete ones left out).
+export function filtersText(filters: FilterNode[], typeOf: (column: string) => ColType | undefined): string {
+  const text = (n: FilterNode, nested: boolean): string => {
+    if (!isGroup(n)) return filterText(n, typeOf(n.column)).join(" ");
+    const items = groupItems(n);
+    const inner = items.map((x) => text(x, true)).join(` ${groupConj(n)} `);
+    const wrapped = nested && items.length > 1 ? `(${inner})` : inner;
+    return n.not ? `not (${inner})` : wrapped;
+  };
+  const root = rootOf(liveFilters(filters));
+  return root.items.map((n) => text(n, true)).join(` ${root.conj} `);
 }
 
 // changeSummary says what the last reload changed, such as
@@ -113,7 +140,8 @@ export function viewSentence(meta: Meta, total: number, view: ViewState) {
   parts.push(`${fmt(total)} of ${fmt(meta.rows)} rows`);
   if (view.search) parts.push(view.regex ? `matching /${view.search}/` : `matching “${view.search}”`);
   const typeOf = (name: string) => meta.columns.find((c) => c.name === name)?.type;
-  if (view.filters.length) parts.push("where " + view.filters.map((f) => filterText(f, typeOf(f.column)).join(" ")).join(" and "));
+  const where = filtersText(view.filters, typeOf);
+  if (where) parts.push("where " + where);
   const hidden = view.columns ? meta.columns.length - view.columns.length : 0;
   if (hidden > 0) parts.push(`${fmt(hidden)} of ${fmt(meta.columns.length)} columns hidden`);
   if (view.sorts.length) parts.push("sorted by " + view.sorts.map((k) => `${k.column} ${k.desc ? "descending" : "ascending"}`).join(", then "));

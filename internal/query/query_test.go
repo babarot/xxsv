@@ -93,6 +93,18 @@ func TestFilters(t *testing.T) {
 		{"not contains", Filter{Column: "name", Op: OpContains, Value: "A", Not: true}, []int{1, 4}},
 		{"not prefix", Filter{Column: "note", Op: OpPrefix, Value: "w", Not: true}, []int{0, 1, 2, 4}},
 		{"not regex", Filter{Column: "note", Op: OpRegex, Value: `l+o\b`, Not: true}, []int{1, 3, 4}},
+		{"in", Filter{Column: "name", Op: OpIn, Values: []string{"bob", "eve"}}, []int{1, 4}},
+		{"not in keeps missing cells", Filter{Column: "ok", Op: OpIn, Values: []string{"false"}, Not: true}, []int{0, 2, 4}},
+		{"boolean in ignores case", Filter{Column: "ok", Op: OpIn, Values: []string{" True "}}, []int{0, 2}},
+		{"in nothing", Filter{Column: "name", Op: OpIn}, []int{}},
+		{"or group", Filter{Or: []Filter{{Column: "name", Op: OpEquals, Value: "bob"}, {Column: "score", Op: OpRange, Min: "10"}}}, []int{1, 4}},
+		{"and group", Filter{And: []Filter{{Column: "ok", Op: OpEquals, Value: "false"}, {Column: "score", Op: OpNotNull}}}, []int{3}},
+		{"empty group keeps every row", Filter{Or: []Filter{}}, []int{0, 1, 2, 3, 4}},
+		{"nested group", Filter{Or: []Filter{
+			{Column: "name", Op: OpEquals, Value: "alice"},
+			{And: []Filter{{Column: "ok", Op: OpEquals, Value: "false"}, {Column: "day", Op: OpNull}}},
+		}}, []int{0, 3}},
+		{"not group", Filter{Not: true, Or: []Filter{{Column: "name", Op: OpEquals, Value: "bob"}}}, []int{0, 2, 3, 4}},
 		{"not range keeps missing cells", Filter{Column: "score", Op: OpRange, Min: "2", Max: "3.5", Not: true}, []int{1, 2, 4}},
 	}
 	for _, tt := range tests {
@@ -118,6 +130,10 @@ func TestBadQueries(t *testing.T) {
 		{Filters: []Filter{{Column: "name", Op: OpRegex, Value: "("}}},
 		{Search: "a(", Regex: true},
 		{Filters: []Filter{{Column: "name", Op: "glob"}}},
+		{Filters: []Filter{{Column: "name", Op: OpNull, Or: []Filter{}}}},
+		{Filters: []Filter{{And: []Filter{}, Or: []Filter{}}}},
+		{Filters: []Filter{{Or: []Filter{{Column: "nope", Op: OpNull}}}}},
+		{Filters: []Filter{{Or: []Filter{{And: []Filter{{Or: []Filter{{Or: []Filter{}}}}}}}}}},
 		{Sorts: []Sort{{Column: "nope"}}},
 		{Offset: -1},
 	} {

@@ -16,6 +16,9 @@ import { exportMenuOpen, renderExportMenu, toggleExportMenu } from "./export-men
 import { wireValuesPanel } from "./values-panel.ts";
 import { wireSearch } from "./search.ts";
 import { filterBySelected, renderSelectionInfo } from "./cell-popover.ts";
+import { addRule, closeFilterUi, closeMenu, closeTop, columnMenu, filterUiOpen, isMenuAnchor, openAdvanced } from "./filter-ui.ts";
+import { bundled } from "./filters.ts";
+import { renderChips } from "./chips.ts";
 import { $, copyText } from "./dom.ts";
 import { copySelection, isCopy } from "./copy.ts";
 import { wireDrag } from "./drag.ts";
@@ -91,7 +94,15 @@ function setup() {
   document.addEventListener("click", (e) => {
     const path = e.composedPath();
     const inside = path.some((n) => n instanceof HTMLElement && (n.id === "colpop" || n.dataset?.prof !== undefined));
-    if (S.colPop !== null && !inside) {
+    // The filter's editor, panel and menus close the same way; the bar and
+    // the button that open them are inside.
+    const inFilter = (ids: string[]) => path.some((n) => n instanceof HTMLElement && ids.includes(n.id));
+    if (!$("fmenu").hidden && !inFilter(["fmenu"]) && !path.some(isMenuAnchor)) closeMenu();
+    else if (filterUiOpen() && $("fmenu").hidden && !inFilter(["fedit", "fadv", "fmenu", "chips", "filter-btn"]) && !path.some(isMenuAnchor)) {
+      closeFilterUi();
+      renderChips();
+    }
+    if (S.colPop !== null && !inside && !inFilter(["fmenu"])) {
       S.colPop = null;
       $("colpop").hidden = true;
       renderHeader();
@@ -103,8 +114,11 @@ function setup() {
     const typing = t instanceof HTMLInputElement || t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement;
     if (e.key === "Escape") {
       if (!$("settings").hidden) toggleSettings(false);
+      else if (filterUiOpen()) closeTop();
       else if (columnsMenuOpen()) toggleColumnsMenu(false);
       else if (exportMenuOpen()) toggleExportMenu(false);
+      // A box in the distribution popover applies as typed: Esc closes it.
+      else if (typing && S.colPop !== null && (t as HTMLElement).closest("#colpop")) toggleColPop(S.colPop);
       else if (typing) (t as HTMLElement).blur();
       else if (S.colPop !== null) toggleColPop(S.colPop);
       else if (S.expanded) { S.expanded = false; renderSelectionInfo(); }
@@ -138,6 +152,10 @@ function setup() {
 
   $("fbar-filter").addEventListener("click", filterBySelected);
   $("fbar-row").addEventListener("click", toggleRow);
+  $("filter-btn").addEventListener("click", (e) => {
+    if (bundled(S.view.filters)) openAdvanced();
+    else columnMenu(e.currentTarget as HTMLElement, addRule);
+  });
   $("cols-btn").addEventListener("click", () => toggleColumnsMenu());
   $("export-btn").addEventListener("click", () => toggleExportMenu());
   wireValuesPanel();

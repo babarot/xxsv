@@ -1,4 +1,4 @@
-import { test, expect, open, cell } from "./fixtures";
+import { test, expect, open, cell, chips } from "./fixtures";
 
 const rowItems = (page: import("@playwright/test").Page) =>
   page.locator("#pinpanel .rk").evaluateAll((els) => els.map((e) => `${e.querySelector("b")!.textContent}=${e.querySelector(".v")!.textContent}${e.classList.contains("hid") ? " (hidden)" : ""}`));
@@ -17,7 +17,7 @@ test("shows the selected cell's row with Enter, following the selection", async 
   await expect.poll(() => rowItems(page)).toEqual(["c=z", "a=y", "j=∅ (missing)", "b=2 (hidden)"]);
   // A value filters the table; a hidden column's too.
   await page.locator('#pinpanel .rk[data-column="b"] .btn-icon').click();
-  await expect(page.locator("#chips .chip")).toHaveText("b is “2”");
+  await expect(chips(page)).toHaveText(["b: 2"]);
   await expect(page.locator("#counts")).toHaveText("1 of 2 rows · 3 columns · 1 hidden");
   await page.keyboard.press("Enter"); // closes it
   await expect(page.locator("#pinpanel")).toBeHidden();

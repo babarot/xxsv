@@ -1,4 +1,4 @@
-import { test, expect, open, cell, column, csv, saveAndWait } from "./fixtures";
+import { test, expect, open, cell, column, csv, saveAndWait, chips, removeChip, pickOp } from "./fixtures";
 
 test("shows the file, the shape, types and cells", async ({ page, serve }) => {
   const xxsv = await serve("t.csv", csv(30, (r, i) => (i === 3 ? [r[0], "", "1234567", r[3], r[4]] : r)));
@@ -83,77 +83,122 @@ test("searches all cells", async ({ page, serve }) => {
 test("filters from the distribution popover and removes the filter from its chip", async ({ page, serve }) => {
   const xxsv = await serve("t.csv", csv(50));
   await open(page, xxsv.url);
-  // Range filter on qty.
+  // Range filter on qty, applied as typed.
   await page.locator('[data-prof="2"]').click();
   const pop = page.locator("#colpop");
   await expect(pop).toBeVisible();
   await expect(pop.locator(".kv")).toContainText("count");
   await pop.locator("input").first().fill("90");
-  await pop.locator(".btn-primary").click();
-  await expect(page.locator("#chips .chip")).toHaveCount(1);
+  await pop.locator("input").first().press("Enter");
+  await expect(chips(page)).toHaveText(["qty: ≥ 90"]);
   await expect(page.locator('[data-sort="qty"] .fmark')).toBeVisible();
   for (const v of await column(page, 2, 3)) expect(Number(v)).toBeGreaterThanOrEqual(90);
-  // The popover stays open and is drawn again with the filter.
+  // The popover stays open, the box keeps its text.
   await expect(pop).toBeVisible();
   await expect(pop.locator("input").first()).toHaveValue("90");
   // Contains filter on name, from the same popover kind.
   await page.keyboard.press("Escape");
   await expect(pop).toBeHidden();
   await page.locator('[data-prof="1"]').click();
+  await pickOp(page, "#colpop", "contains");
   await pop.locator('input[placeholder="contains…"]').fill("item1");
   await pop.locator('input[placeholder="contains…"]').press("Enter");
-  await expect(page.locator("#chips .chip")).toHaveCount(2);
+  await expect(chips(page)).toHaveCount(2);
   await expect(page.locator("#chips .chip-clear")).toBeVisible();
-  // Remove one, then clear all.
-  await page.locator("#chips .chip").first().locator("button").click();
-  await expect(page.locator("#chips .chip")).toHaveCount(1);
-  await page.locator("#chips .chip").first().locator("button").click();
+  // Remove one from its editor, then clear all.
+  await page.keyboard.press("Escape");
+  await removeChip(page, 0);
+  await expect(chips(page)).toHaveText(["name: contains “item1”"]);
+  await page.locator("#chips .chip-clear").click();
   await expect(page.locator("#chips")).toBeHidden();
   await expect(page.locator("#counts")).toHaveText("50 rows · 5 columns");
 });
 
-test("filters by a top value button and toggles it off", async ({ page, serve }) => {
-  const xxsv = await serve("t.csv", "k,v\na,1\na,2\nb,3\n");
+test("filters by values picked in the list, and unpicks them", async ({ page, serve }) => {
+  const xxsv = await serve("t.csv", "k,v\na,1\na,2\nb,3\nc,4\n");
   await open(page, xxsv.url);
   await page.locator('[data-prof="0"]').click();
-  const a = page.locator("#colpop .pick button").filter({ hasText: "a" }).first();
-  await a.click();
-  await expect(page.locator("#counts")).toHaveText("2 of 3 rows · 2 columns");
-  await page.locator("#colpop .pick button.on").click();
-  await expect(page.locator("#counts")).toHaveText("3 rows · 2 columns");
+  const item = (v: string) => page.locator("#colpop .vlist label").filter({ hasText: new RegExp(`^${v}`) });
+  await item("a").click();
+  await expect(page.locator("#counts")).toHaveText("2 of 4 rows · 2 columns");
+  await item("b").click(); // one of several values
+  await expect(page.locator("#counts")).toHaveText("3 of 4 rows · 2 columns");
+  await expect(chips(page)).toHaveText(["k: a, b"]);
+  await item("a").click();
+  await item("b").click();
+  await expect(page.locator("#counts")).toHaveText("4 rows · 2 columns");
+  await expect(chips(page)).toHaveClass(/idle/); // waits for a value
 });
 
-test("negates a filter with the condition menu", async ({ page, serve }) => {
+test("negates a filter and switches its condition from the menu", async ({ page, serve }) => {
   const xxsv = await serve("t.csv", "k,v\na,1\na,2\nb,3\nab,4\n,5\n");
   await open(page, xxsv.url);
   await page.locator('[data-prof="0"]').click();
-  const op = page.locator("#colpop select.ff-op");
-  // "is not" a value pill keeps the other values and the missing cell.
-  await op.selectOption("!equals");
-  await page.locator("#colpop .pick button").filter({ hasText: /^a/ }).first().click();
-  await expect(page.locator("#chips .chip")).toHaveText("k is not “a”");
+  // "is not" a value keeps the other values and the missing cell.
+  await pickOp(page, "#colpop", "is not");
+  await page.locator("#colpop .vlist label").filter({ hasText: /^a\d/ }).click();
+  await expect(chips(page)).toHaveText(["k: is not “a”"]);
   await expect(page.locator("#counts")).toHaveText("3 of 5 rows · 2 columns");
-  await expect(page.locator("#colpop .pick button.on.not")).toHaveCount(1);
-  await expect(op).toHaveValue("!equals");
-  // Text conditions from the same menu.
-  await op.selectOption("!contains");
+  await expect(page.locator("#colpop .vlist .lv.strike")).toHaveCount(1);
+  // Text conditions from the same menu; the value carries over.
+  await pickOp(page, "#colpop", "does not contain");
+  await expect(chips(page)).toHaveText(["k: does not contain “a”"]);
   const box = page.locator('#colpop input[placeholder="contains…"]');
   await box.fill("b");
   await box.press("Enter");
-  await expect(page.locator("#chips .chip")).toHaveText("k does not contain “b”");
+  await expect(chips(page)).toHaveText(["k: does not contain “b”"]);
   await expect(page.locator("#counts")).toHaveText("3 of 5 rows · 2 columns");
-  await op.selectOption("prefix");
-  await page.locator('#colpop input[placeholder="starts with…"]').press("Enter");
-  await expect(page.locator("#chips .chip")).toHaveText("k starts with “b”");
+  await pickOp(page, "#colpop", "starts with");
+  await expect(chips(page)).toHaveText(["k: starts with “b”"]);
   await expect(page.locator("#counts")).toHaveText("1 of 5 rows · 2 columns");
-  // "not between" on a number column.
+  // "not between" and "≥" on a number column.
   await page.keyboard.press("Escape");
   await page.locator('[data-prof="1"]').click();
-  await page.locator("#colpop select.ff-op").selectOption("!range");
-  await page.locator("#colpop .ff input").first().fill("2");
-  await page.locator("#colpop .ff input").nth(1).fill("4");
-  await page.locator("#colpop .ff input").nth(1).press("Enter");
-  await expect(page.locator("#chips .chip").nth(1)).toHaveText("v not 2 – 4");
+  await pickOp(page, "#colpop", "not between");
+  await page.locator("#colpop .fed input").first().fill("2");
+  await page.locator("#colpop .fed input").nth(1).fill("4");
+  await page.locator("#colpop .fed input").nth(1).press("Enter");
+  await expect(chips(page).nth(1)).toHaveText("v: not between 2 – 4");
+  await pickOp(page, "#colpop", "≥");
+  await expect(chips(page).nth(1)).toHaveText("v: ≥ 2");
+});
+
+test("joins rules with or and groups them in the advanced filter", async ({ page, serve }) => {
+  const xxsv = await serve("t.csv", "k,v\na,1\nb,2\nc,3\na,4\nb,5\n");
+  await open(page, xxsv.url);
+  await page.locator("#filter-btn").click();
+  await page.locator("#fmenu").getByRole("button", { name: /^k/ }).click();
+  await page.locator("#fedit .vlist label").filter({ hasText: /^a/ }).click();
+  await expect(page.locator("#counts")).toHaveText("2 of 5 rows · 2 columns");
+  // Advanced: a group of "v ≥ 5" or "v ≤ 1", and-ed with k.
+  await page.locator("#chips .f-adv").click();
+  await page.locator("#fadv .adv-foot .lnk").first().click();
+  await page.locator("#fmenu").getByRole("button", { name: "Add filter group" }).click();
+  const g = page.locator("#fadv .adv-group .adv-row");
+  await g.first().locator("select").nth(0).selectOption("v");
+  await g.first().locator("select").nth(1).selectOption("ge");
+  await g.first().locator("input").fill("4");
+  await g.first().locator("input").press("Enter");
+  await expect(page.locator("#counts")).toHaveText("1 of 5 rows · 2 columns");
+  await page.locator("#fadv .adv-group .gfoot .lnk").first().click();
+  await g.nth(1).locator("select").nth(1).selectOption("v");
+  await g.nth(1).locator("select").nth(2).selectOption("le");
+  await g.nth(1).locator("input").fill("1");
+  await g.nth(1).locator("input").press("Enter");
+  await expect(page.locator("#counts")).toHaveText("2 of 5 rows · 2 columns");
+  await expect(page.locator("#chips .fchip.bundle")).toHaveText("k is “a” and (v ≥ 4 or v ≤ 1)");
+  // Or at the top: every row that is a or in the group.
+  await page.locator("#fadv select.cj").first().selectOption("or");
+  await expect(page.locator("#counts")).toHaveText("3 of 5 rows · 2 columns");
+  // The view, groups included, survives a reload of the page.
+  await page.keyboard.press("Escape");
+  await expect.poll(() => decodeURIComponent(page.url())).toContain('"filters":[{"or":[{"column":"k"');
+  await page.reload();
+  await expect(page.locator("#counts")).toHaveText("3 of 5 rows · 2 columns");
+  await expect(page.locator("#chips .fchip.bundle")).toHaveText("k is “a” or (v ≥ 4 or v ≤ 1)");
+  // The column popover leaves rules in groups to the advanced filter.
+  await page.locator('[data-prof="1"]').click();
+  await expect(page.locator("#colpop .inadv")).toContainText("advanced filter");
 });
 
 test("restores the view from the URL hash", async ({ page, serve }) => {
@@ -161,7 +206,7 @@ test("restores the view from the URL hash", async ({ page, serve }) => {
   const view = { search: "item1", filters: [{ column: "qty", op: "range", min: "50" }], sort: { column: "qty", desc: true }, top: 0 };
   await open(page, xxsv.url + "#" + encodeURIComponent(JSON.stringify(view)));
   await expect(page.locator("#search")).toHaveValue("item1");
-  await expect(page.locator("#chips .chip")).toHaveCount(1);
+  await expect(chips(page)).toHaveCount(1);
   await expect(page.locator('[data-sort="qty"] .arrow')).toBeVisible();
   const qty = (await column(page, 2, 3)).map(Number);
   expect(qty).toEqual([...qty].sort((a, b) => b - a));
@@ -185,11 +230,11 @@ test("filters missing and not missing cells from the distribution popover", asyn
   await expect(pop.locator(".lbl").filter({ hasText: "Missing" })).toBeVisible();
   await pop.locator('[data-op="null"]').click();
   await expect(page.locator("#counts")).toHaveText("2 of 4 rows · 2 columns");
-  await expect(page.locator("#chips .chip")).toContainText("is missing");
+  await expect(chips(page)).toContainText("is missing");
   await expect(pop.locator('[data-op="null"]')).toHaveClass(/on/);
   await pop.locator('[data-op="notnull"]').click(); // replaces it
   await expect(page.locator("#counts")).toHaveText("2 of 4 rows · 2 columns");
-  await expect(page.locator("#chips .chip")).toContainText("is not missing");
+  await expect(chips(page)).toContainText("is not missing");
   await expect(cell(page, 0, 0)).toHaveText("a");
   await pop.locator('[data-op="notnull"]').click(); // toggles off
   await expect(page.locator("#chips")).toBeHidden();
@@ -205,7 +250,8 @@ test("shows no missing buttons for a column without missing cells", async ({ pag
   const xxsv = await serve("t.csv", "k\na\nb\n");
   await open(page, xxsv.url);
   await page.locator('[data-prof="0"]').click();
-  await expect(page.locator("#colpop .pick")).toHaveCount(1); // the top values only
+  await expect(page.locator("#colpop .vlist")).toBeVisible(); // the values only
+  await expect(page.locator("#colpop .pick")).toHaveCount(0);
   await expect(page.locator("#colpop .lbl").filter({ hasText: "Missing" })).toHaveCount(0);
   await expect(page.locator('#colpop [data-op="null"]')).toHaveCount(0);
 });
@@ -244,13 +290,13 @@ test("filters by the selected cell from the formula bar", async ({ page, serve }
   await expect(button).toBeEnabled();
   await button.click();
   await expect(page.locator("#counts")).toHaveText("2 of 4 rows · 3 columns");
-  await expect(page.locator("#chips .chip")).toContainText("is “a”");
-  await page.locator("#chips .chip button").click();
+  await expect(chips(page)).toHaveText(["k: a"]);
+  await removeChip(page);
   // A missing cell filters to missing cells.
   await cell(page, 1, 0).click();
   await button.click();
-  await expect(page.locator("#chips .chip")).toContainText("is missing");
-  await page.locator("#chips .chip button").click();
+  await expect(chips(page)).toContainText("is missing");
+  await removeChip(page);
   // JSON values cannot be matched; a missing JSON cell can.
   await cell(page, 0, 1).click();
   await expect(button).toBeDisabled();
@@ -297,7 +343,7 @@ test("tells invalid cells from missing ones, and filters them", async ({ page, s
   await expect(cell(page, 0, 1)).toHaveText("US");
   await pop.locator('[data-op="invalid"]').click();
   await expect(page.locator("#counts")).toHaveText("1 of 42 rows · 2 columns");
-  await expect(page.locator("#chips .chip")).toContainText("is not a number");
+  await expect(chips(page)).toContainText("is not a number");
   await expect(cell(page, 0, 0)).toHaveText("pending");
   await expect(cell(page, 0, 0)).toHaveClass(/bad/);
 });

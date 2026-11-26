@@ -135,3 +135,18 @@ export function csv(n: number, edit?: (row: string[], i: number) => string[]): s
   }
   return lines.join("\n") + "\n";
 }
+
+/** The filter chips above the table. */
+export const chips = (page: Page) => page.locator("#chips .fchip");
+
+/** Removes the i-th filter chip's rule from its editor. */
+export async function removeChip(page: Page, i = 0) {
+  await chips(page).nth(i).click();
+  await page.locator('#fedit [aria-label="Delete filter"]').click();
+}
+
+/** Picks a rule's condition from the menu of the editor in scope. */
+export async function pickOp(page: Page, scope: string, label: string) {
+  await page.locator(`${scope} .op-btn`).click();
+  await page.locator("#fmenu").getByRole("button", { name: label, exact: true }).click();
+}

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { abbr, binLabel, changeSummary, colLetter, edgeLabel, estimateWidth, filterText, groupDigits, imageKind, pretty, viewSentence } from "./format.ts";
+import { abbr, binLabel, changeSummary, colLetter, edgeLabel, estimateWidth, filterText, filtersText, groupDigits, imageKind, pretty, viewSentence } from "./format.ts";
 import type { Changes, Meta, Stats } from "./types.ts";
 
 test("groupDigits groups integers in their text, exact past 2^53", () => {
@@ -42,7 +42,12 @@ test("pretty indents JSON and leaves the rest", () => {
 });
 
 test("filterText describes each kind of filter", () => {
-  assert.deepEqual(filterText({ column: "q", op: "range", min: "1" }), ["q", "1 – …"]);
+  assert.deepEqual(filterText({ column: "q", op: "range", min: "1" }), ["q", "≥ 1"]);
+  assert.deepEqual(filterText({ column: "q", op: "range", max: "2" }), ["q", "≤ 2"]);
+  assert.deepEqual(filterText({ column: "q", op: "range", min: "3", max: "3" }), ["q", "= 3"]);
+  assert.deepEqual(filterText({ column: "q", op: "range", min: "3", max: "3", not: true }), ["q", "≠ 3"]);
+  assert.deepEqual(filterText({ column: "q", op: "in", values: ["a", "b"] }), ["q", "is “a”, “b”"]);
+  assert.deepEqual(filterText({ column: "q", op: "in", values: ["a"], not: true }), ["q", "is not “a”"]);
   assert.deepEqual(filterText({ column: "q", op: "null" }), ["q", "is missing"]);
   assert.deepEqual(filterText({ column: "q", op: "notnull" }), ["q", "is not missing"]);
   assert.deepEqual(filterText({ column: "q", op: "equals", value: "a" }), ["q", "is “a”"]);
@@ -52,7 +57,7 @@ test("filterText describes each kind of filter", () => {
   assert.deepEqual(filterText({ column: "q", op: "prefix", value: "c" }), ["q", "starts with “c”"]);
   assert.deepEqual(filterText({ column: "q", op: "suffix", value: "d" }), ["q", "ends with “d”"]);
   assert.deepEqual(filterText({ column: "q", op: "regex", value: "e", not: true }), ["q", "does not match /e/"]);
-  assert.deepEqual(filterText({ column: "q", op: "range", min: "1", max: "2", not: true }), ["q", "not 1 – 2"]);
+  assert.deepEqual(filterText({ column: "q", op: "range", min: "1", max: "2", not: true }), ["q", "not between 1 – 2"]);
   assert.deepEqual(filterText({ column: "q", op: "invalid" }, "integer"), ["q", "is not a number"]);
   assert.deepEqual(filterText({ column: "q", op: "invalid" }, "datetime"), ["q", "is not a date"]);
   assert.deepEqual(filterText({ column: "q", op: "invalid" }, "boolean"), ["q", "is not true/false"]);
@@ -75,8 +80,19 @@ test("viewSentence describes the view", () => {
   assert.equal(viewSentence(meta, 1000, { search: "", regex: false, filters: [], sorts: [], columns: null, top: 0 }), "1,000 of 1,000 rows.");
   assert.equal(
     viewSentence(meta, 12, { search: "ab", regex: false, filters: [{ column: "q", op: "range", min: "1", max: "2" }], sorts: [{ column: "q", desc: true }, { column: "r" }], columns: ["q"], top: 0 }),
-    "12 of 1,000 rows, matching “ab”, where q 1 – 2, 1 of 2 columns hidden, sorted by q descending, then r ascending.",
+    "12 of 1,000 rows, matching “ab”, where q between 1 – 2, 1 of 2 columns hidden, sorted by q descending, then r ascending.",
   );
+});
+
+test("filtersText joins rules and groups, leaving out incomplete rules", () => {
+  const typeOf = () => undefined;
+  assert.equal(filtersText([], typeOf), "");
+  assert.equal(filtersText([{ column: "a", op: "in", values: ["x"] }, { column: "b", op: "in", values: [] }], typeOf), "a is “x”");
+  assert.equal(
+    filtersText([{ column: "a", op: "in", values: ["x", "y"] }, { or: [{ column: "b", op: "range", min: "4" }, { column: "c", op: "contains", value: "z" }] }], typeOf),
+    "a is “x”, “y” and (b ≥ 4 or c contains “z”)",
+  );
+  assert.equal(filtersText([{ or: [{ column: "a", op: "null" }, { column: "b", op: "null" }] }], typeOf), "a is missing or b is missing");
 });
 
 test("estimateWidth stays between 90 and 340 pixels", () => {

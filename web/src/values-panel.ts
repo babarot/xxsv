@@ -3,6 +3,7 @@
 // of its own. A value filters the table to it, switching from the value
 // filtered to before; pressed again, the filter goes.
 import { NULL_MARK, TYPE_ABBR } from "./constants.ts";
+import { isGroup, liveFilters, topRules } from "./filters.ts";
 import { fmt } from "./format.ts";
 import { S, setFilter } from "./app.ts";
 import { api, post } from "./api.ts";
@@ -61,7 +62,7 @@ async function loadMore() {
   const mine = request;
   try {
     const res = await api<ValuesResponse>("/api/values", post({
-      query: { search: S.view.search, regex: S.view.regex || undefined, filters: S.view.filters },
+      query: { search: S.view.search, regex: S.view.regex || undefined, filters: liveFilters(S.view.filters) },
       column: S.valuesCol, search, offset: items.length, limit: PAGE,
     }));
     if (mine !== request || res.generation !== S.meta?.generation) return;
@@ -118,13 +119,15 @@ function draw() {
     panel.replaceChildren(panelTabs(), head, summary, box, list);
   }
   summary!.textContent = info
-    ? `${fmt(info.distinct)} distinct in ${fmt(info.rows)} rows${S.view.search || S.view.filters.some((f) => f.column !== col.name) ? " (filtered)" : ""}${search ? ` · ${fmt(info.total)} match` : ""}`
+    ? `${fmt(info.distinct)} distinct in ${fmt(info.rows)} rows${S.view.search || liveFilters(S.view.filters).some((f) => isGroup(f) || f.column !== col.name) ? " (filtered)" : ""}${search ? ` · ${fmt(info.total)} match` : ""}`
     : "Counting…";
-  const active = S.view.filters.find((f) => f.column === col.name);
+  // A value is on when the column's one rule is "is" that value alone.
+  const rules = topRules(S.view.filters, col.name);
+  const active = rules.length === 1 ? rules[0] : undefined;
   const max = Math.max(1, ...items.map((i) => i.count));
   list!.replaceChildren();
   for (const it of items) {
-    const on = !!active && (it.missing ? active.op === "null" : active.op === "equals" && !active.not && active.value === it.value);
+    const on = !!active && (it.missing ? active.op === "null" : active.op === "in" && !active.not && active.values?.length === 1 && active.values[0] === it.value);
     const row = el("button", "vals-item" + (on ? " on" : "")) as HTMLButtonElement;
     const label = el("span", it.missing ? "null" : "", it.missing ? `${NULL_MARK} (missing)` : it.value === "" ? "(empty)" : it.value + (it.cut ? "…" : ""));
     const bar = el("em");
@@ -155,7 +158,7 @@ async function pickValue(column: string, it: ValueItem, on: boolean) {
       return;
     }
   }
-  setFilter(column, { column, op: "equals", value });
+  setFilter(column, { column, op: "in", values: [value] });
 }
 
 // The list grows as it is scrolled near its end.

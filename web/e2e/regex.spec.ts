@@ -1,4 +1,4 @@
-import { test, expect, open, csv } from "./fixtures";
+import { test, expect, open, csv, chips, pickOp } from "./fixtures";
 
 const hashView = (page: import("@playwright/test").Page) => JSON.parse(decodeURIComponent(new URL(page.url()).hash.slice(1) || "{}"));
 
@@ -42,7 +42,7 @@ test("filters a column with a regular expression", async ({ page, serve }) => {
   const xxsv = await serve("t.csv", csv(30));
   await open(page, xxsv.url);
   await page.locator('[data-prof="1"]').click();
-  await page.locator("#colpop select.ff-op").selectOption("regex");
+  await pickOp(page, "#colpop", "matches regex");
   const box = page.locator('#colpop input[placeholder="regex (RE2)…"]');
   await box.fill("^item(1|2");
   await box.press("Enter");
@@ -50,6 +50,6 @@ test("filters a column with a regular expression", async ({ page, serve }) => {
   await expect(page.locator("#chips")).toBeHidden();
   await box.fill("^item(1|2)$");
   await box.press("Enter");
-  await expect(page.locator("#chips .chip")).toHaveText("name matches /^item(1|2)$/");
+  await expect(chips(page)).toHaveText("name: matches /^item(1|2)$/");
   await expect(page.locator("#counts")).toHaveText("2 of 30 rows · 5 columns");
 });
