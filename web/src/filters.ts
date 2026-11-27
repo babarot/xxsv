@@ -104,6 +104,20 @@ export function remove(nodes: FilterNode[], target: FilterNode): FilterNode[] {
   return out;
 }
 
+// facetFilters are the filters a rule's values are counted over: all but
+// the rule. Under "or" or a negated group, the rule's neighbours do not
+// narrow the rows it can match, so the top-level node holding it goes too.
+export function facetFilters(nodes: FilterNode[], f: Filter): FilterNode[] {
+  const narrows = (n: FilterNode): boolean => n === f || (isGroup(n) && !n.not && !n.or && groupItems(n).some(narrows));
+  const out: FilterNode[] = [];
+  for (const n of nodes) {
+    if (n === f) continue;
+    if (!rulesOf([n]).includes(f)) out.push(n);
+    else if (narrows(n)) out.push(...remove([n], f));
+  }
+  return out;
+}
+
 // dropColumns drops the rules on columns the file no longer has.
 export function dropColumns(nodes: FilterNode[], names: Set<string>): FilterNode[] {
   const out: FilterNode[] = [];

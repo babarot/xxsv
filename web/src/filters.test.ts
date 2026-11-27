@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bundled, dropColumns, fromRoot, inGroup, liveFilters, normalize, opKey, remove, replaceColumn, rootOf, topRules, withOp } from "./filters.ts";
+import { bundled, dropColumns, facetFilters, fromRoot, inGroup, liveFilters, normalize, opKey, remove, replaceColumn, rootOf, topRules, withOp } from "./filters.ts";
 import type { Filter, FilterNode } from "./types.ts";
 
 const a: Filter = { column: "a", op: "in", values: ["x"] };
@@ -46,6 +46,15 @@ test("remove and dropColumns drop groups left empty", () => {
   assert.deepEqual(remove([{ or: [b, c] }], b), [{ or: [c] }]);
   assert.deepEqual(dropColumns([a, { or: [b, c] }], new Set(["a", "c"])), [a, { or: [c] }]);
   assert.deepEqual(dropColumns([{ or: [b] }], new Set(["a"])), []);
+});
+
+test("facetFilters leaves out the rule, and what holds it under or or not", () => {
+  assert.deepEqual(facetFilters([a, b, c], b), [a, c]);
+  assert.deepEqual(facetFilters([a, { and: [b, c] }], b), [a, { and: [c] }]);
+  assert.deepEqual(facetFilters([a, { or: [b, c] }], b), [a]);
+  assert.deepEqual(facetFilters([{ or: [a, b] }], a), []);
+  assert.deepEqual(facetFilters([c, { and: [a, b], not: true }], a), [c]);
+  assert.deepEqual(facetFilters([a, b], { ...a }), [a, b]); // a draft not yet in the filters
 });
 
 test("normalize reads equals as in, and drops what is neither a rule nor a group", () => {

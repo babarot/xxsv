@@ -5,12 +5,14 @@
 // a regular expression for the server's check.
 import { abbr, fmt } from "./format.ts";
 import {
-  bundled, defaultRule, fromRoot, groupConj, groupItems, isGroup, makeGroup, opKey, opsFor, remove, rootOf, rulesOf, withOp,
+  bundled, defaultRule, facetFilters, fromRoot, groupConj, groupItems, isGroup, liveFilters, makeGroup, opKey, opsFor, remove, rootOf, rulesOf, withOp,
   type Conj, type OpKey, type Root,
 } from "./filters.ts";
 import { icon } from "./icons.ts";
 import type { ColType, Filter, FilterNode, Group } from "./types.ts";
 import { S, filtersChanged } from "./app.ts";
+import { api, post } from "./api.ts";
+import { showError } from "./status.ts";
 import { renderChips } from "./chips.ts";
 import { check } from "./search.ts";
 import { $, el } from "./dom.ts";
@@ -23,6 +25,56 @@ function knownValues(column: string): { value: string; count: number }[] {
   const s = S.allStats.find((x) => x.name === column);
   return s?.top ?? [];
 }
+
+// A rule's value list counts the values over the rows the other filters
+// keep, as a faceted search does: the rule itself is left out (see
+// facetFilters), so the values it can switch to keep their counts. The
+// other rules go in one
+// "and" group, as the server would also leave out those directly on the
+// column (for the Values tab).
+interface FacetItem { value: string; count: number; missing?: boolean; cut?: boolean; rowId?: number }
+interface Facet { generation: number; rows: number; total: number; items: FacetItem[] }
+
+const FACET_LIMIT = 100;
+
+// facets keeps the last answers, so that a popover opened again draws its
+// counts at once.
+const facets = new Map<string, Facet>();
+
+function facetRequest(f: Filter, search: string) {
+  const rest = liveFilters(facetFilters(S.view.filters, f));
+  return {
+    query: { search: S.view.search, regex: S.view.regex || undefined, filters: rest.length ? [makeGroup("and", rest)] : [] },
+    column: f.column, search, offset: 0, limit: FACET_LIMIT,
+  };
+}
+
+const facetKey = (body: unknown) => `${S.meta?.generation}\x00${JSON.stringify(body)}`;
+
+async function fetchFacet(body: unknown): Promise<Facet | null> {
+  const key = facetKey(body);
+  const res = await api<Facet>("/api/values", post(body));
+  if (res.generation !== S.meta?.generation) return null;
+  facets.delete(key);
+  facets.set(key, res);
+  if (facets.size > 16) facets.delete(facets.keys().next().value!);
+  return res;
+}
+
+// fullValue is the whole of a listed value, fetched when the server cut it.
+async function fullValue(column: string, it: FacetItem): Promise<string | null> {
+  if (!it.cut || it.rowId === undefined || !S.meta) return it.value;
+  const col = S.meta.columns.findIndex((c) => c.name === column);
+  try {
+    return (await api<{ value: string }>(`/api/cell?gen=${S.meta.generation}&row=${it.rowId}&col=${col}`)).value;
+  } catch (e) {
+    showError(`value failed: ${(e as Error).message}`);
+    return null;
+  }
+}
+
+// holds reports whether a listed value is v: a cut one is the start of it.
+const holds = (it: FacetItem, v: string) => (it.cut ? v.startsWith(it.value) : v === it.value);
 
 // chosen keeps the condition picked for a rule: a range without bounds
 // reads as "between", so "≥" picked before a value is typed is kept here.
@@ -279,8 +331,9 @@ export function ruleEditor(f: Filter, commit: () => void, focus = true): HTMLEle
 
 // valueList picks the values of "is" and "is not": the picked ones sit as
 // pills in the search box (× or Backspace removes one, as in Notion), and
-// under it the column's values, most frequent first, narrowed by the box,
-// which also adds a value not listed.
+// under it the column's values over the rows the other filters keep, most
+// frequent first, narrowed by the box, which also adds a value not listed.
+// Frequent values of the file that those rows lack follow with 0, dimmed.
 function valueList(f: Filter, commit: () => void, focus: boolean) {
   const wrap = el("div", "vpick");
   const box = el("div", "vbox");
@@ -319,23 +372,38 @@ function valueList(f: Filter, commit: () => void, focus: boolean) {
       box.insertBefore(tag, q);
     });
     q.placeholder = picked.length ? "" : "Search or add a value…";
-    const known = knownValues(f.column);
-    const items = [
-      ...picked.filter((v) => !known.some((k) => k.value === v)).map((v) => ({ value: v, count: -1 })),
-      ...known,
-    ];
     const needle = q.value.toLowerCase();
+    // listed: the values the rows hold; complete when the answer lists all
+    // of those matching the box, so that any other value has none.
+    const listed = (facet?.items ?? []).filter((it) => !it.missing);
+    const complete = !!facet && facet.total <= facet.items.length && facetSearch === q.value && facet.generation === S.meta?.generation;
+    const zero: FacetItem[] = complete ? knownValues(f.column).filter((k) => !listed.some((it) => holds(it, k.value))).map((k) => ({ value: k.value, count: 0 })) : [];
+    const items: FacetItem[] = facet ? [
+      ...picked.filter((v) => ![...listed, ...zero].some((it) => holds(it, v))).map((v) => ({ value: v, count: complete ? 0 : -1 })),
+      ...listed,
+      ...zero,
+    ] : [
+      // Until the counts come, the file's frequent values without them.
+      ...picked.filter((v) => !knownValues(f.column).some((k) => k.value === v)).map((v) => ({ value: v, count: -1 })),
+      ...knownValues(f.column).map((k) => ({ value: k.value, count: -1 })),
+    ];
     list.replaceChildren();
     for (const it of items) {
       if (needle && !it.value.toLowerCase().includes(needle)) continue;
-      const on = picked.includes(it.value);
-      const row = el("label", on ? "on" : "");
+      const on = picked.some((v) => holds(it, v));
+      const row = el("label", (on ? "on" : "") + (it.count === 0 ? " zero" : ""));
       const cb = el("input") as HTMLInputElement;
       cb.type = "checkbox";
       cb.checked = on;
-      cb.addEventListener("change", () => set(cb.checked ? [...picked, it.value] : picked.filter((v) => v !== it.value)));
-      row.title = `${label(it.value)}${it.count >= 0 ? ` (${fmt(it.count)})` : ""}`;
-      row.append(cb, el("span", "lv" + (on && not ? " strike" : ""), label(it.value)), el("span", "n", it.count >= 0 ? abbr(it.count) : ""));
+      cb.addEventListener("change", async () => {
+        if (!cb.checked) return set(picked.filter((v) => !holds(it, v)));
+        const v = await fullValue(f.column, it);
+        if (v === null) return draw();
+        if (!(f.values ?? []).includes(v)) set([...(f.values ?? []), v]);
+      });
+      const text = label(it.value) + (it.cut ? "…" : "");
+      row.title = `${text}${it.count >= 0 ? ` (${fmt(it.count)})` : ""}`;
+      row.append(cb, el("span", "lv" + (on && not ? " strike" : ""), text), el("span", "n", it.count >= 0 ? abbr(it.count) : ""));
       list.appendChild(row);
     }
     const text = q.value.trim();
@@ -348,11 +416,45 @@ function valueList(f: Filter, commit: () => void, focus: boolean) {
       });
       list.appendChild(add);
     }
-    if (!list.childElementCount) list.appendChild(el("div", "hint", "No values."));
+    if (!list.childElementCount && facet) list.appendChild(el("div", "hint", "No values."));
+  };
+  // facet is the answer drawn, for the box's text facetSearch; an answer
+  // to an older request is dropped.
+  let facet: Facet | null = null;
+  let facetSearch = "";
+  let request = 0;
+  let timer = 0;
+  const load = async (retry = true) => {
+    const search = q.value;
+    const body = facetRequest(f, search);
+    const mine = ++request;
+    const cached = facets.get(facetKey(body));
+    if (cached) {
+      facet = cached;
+      facetSearch = search;
+      draw();
+      return;
+    }
+    try {
+      const res = await fetchFacet(body);
+      if (mine !== request) return;
+      // An answer from before a reload: ask again once the new file is in.
+      if (!res) {
+        if (retry) setTimeout(() => wrap.isConnected && void load(false), 300);
+        return;
+      }
+      facet = res;
+      facetSearch = search;
+      if (wrap.isConnected) draw();
+    } catch (e) {
+      if (mine === request) showError(`values failed: ${(e as Error).message}`);
+    }
   };
   q.addEventListener("input", () => {
     armed = false;
     draw();
+    clearTimeout(timer);
+    timer = window.setTimeout(() => void load(), 150);
   });
   q.addEventListener("keydown", (e) => {
     if (e.key === "Enter") list.querySelector<HTMLElement>(".vadd, label:not(.on) input")?.click();
@@ -369,6 +471,7 @@ function valueList(f: Filter, commit: () => void, focus: boolean) {
     }
   });
   draw();
+  void load();
   wrap.append(box, list);
   if (focus) setTimeout(() => q.focus());
   return wrap;

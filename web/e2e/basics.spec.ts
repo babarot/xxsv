@@ -130,6 +130,52 @@ test("filters by values picked in the list, and unpicks them", async ({ page, se
   await expect(chips(page)).toHaveClass(/idle/); // waits for a value
 });
 
+test("counts the values in the list over the rows the other filters keep", async ({ page, serve }) => {
+  const xxsv = await serve("t.csv", "s,g\nx,A\nx,B\ny,A\ny,A\ny,C\n");
+  await open(page, xxsv.url);
+  const items = page.locator("#colpop .vlist label");
+  await page.locator('[data-prof="0"]').click();
+  await expect(items).toHaveText(["y3", "x2"]);
+  await items.filter({ hasText: /^x/ }).click();
+  await expect(page.locator("#counts")).toHaveText("2 of 5 rows · 2 columns");
+  // Over the rows s keeps; C, which they lack, follows with 0, dimmed.
+  await page.keyboard.press("Escape");
+  await page.locator('[data-prof="1"]').click();
+  await expect(items).toHaveText(["A1", "B1", "C0"]);
+  await expect(page.locator("#colpop .vlist label.zero")).toHaveText(["C0"]);
+  await items.filter({ hasText: /^A/ }).click();
+  await expect(page.locator("#counts")).toHaveText("1 of 5 rows · 2 columns");
+  // The rules stack: s counts over the rows g keeps, leaving out its own.
+  await page.keyboard.press("Escape");
+  await page.locator('[data-prof="0"]').click();
+  await expect(items).toHaveText(["y2", "x1"]);
+});
+
+test("counts the values over the other rules on the same column", async ({ page, serve }) => {
+  const xxsv = await serve("t.csv", "s,g\nxa,A\nxb,B\nya,A\nya,B\n");
+  await open(page, xxsv.url);
+  await page.locator("#filter-btn").click();
+  await page.locator("#fmenu").getByRole("button", { name: /^s/ }).click();
+  await pickOp(page, "#fedit", "starts with");
+  await page.locator("#fedit .fed input").fill("x");
+  await page.locator("#fedit .fed input").press("Enter");
+  await expect(page.locator("#counts")).toHaveText("2 of 4 rows · 2 columns");
+  await page.locator("#filter-btn").click();
+  await page.locator("#fmenu").getByRole("button", { name: /^s/ }).click();
+  await expect(page.locator("#fedit .vlist label")).toHaveText(["xa1", "xb1", "ya0"]);
+});
+
+test("picks the whole of a long value cut in the list", async ({ page, serve }) => {
+  const long = "w".repeat(1500);
+  const xxsv = await serve("t.csv", `k\n${long}\n${long}\nb\n`);
+  await open(page, xxsv.url);
+  await page.locator('[data-prof="0"]').click();
+  const item = page.locator("#colpop .vlist label").filter({ hasText: /^w+…/ });
+  await item.click();
+  await expect(page.locator("#counts")).toHaveText("2 of 3 rows · 1 columns");
+  await expect(item).toHaveClass(/on/);
+});
+
 test("shows the picked values as pills in the search box, and removes them", async ({ page, serve }) => {
   const xxsv = await serve("t.csv", "k\na\na\nb\nc\n");
   await open(page, xxsv.url);
